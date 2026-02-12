@@ -1,0 +1,24 @@
+# Byte-compiled files
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Packaging/output artifacts
+build/
+dist/
+*.egg-info/
+
+# OS/desktop junk
+.DS_Store
+Thumbs.db
+
+# Logs and temps
+*.log
+*.tmp
+
+# Local secrets
+.env
+
+# App runtime data (ignore persisted device files in repo)
+devices.json
+*.json
