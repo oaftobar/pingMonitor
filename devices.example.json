@@ -1,0 +1,10 @@
+[
+  {
+    "name": "Example Printer",
+    "ip": "192.168.1.100"
+  },
+  {
+    "name": "Example Server",
+    "ip": "192.168.1.200"
+  }
+]
