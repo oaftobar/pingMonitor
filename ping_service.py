@@ -40,7 +40,6 @@ def ping_once(ip: str) -> Dict[str, Any]:
             r"time[=<]\s*([0-9\.]+)\s*ms",  # "time=23.4 ms"
             r"time\s*([0-9\.]+)\s*ms",  # "time 23.4 ms"
             r"time[=<]([0-9\.]+)\s*ms",  # "time<1ms"
-            r"time[=<]\s*([0-9\.]+)\s*ms",  # redundant typo safety
             r"round-trip min/avg/max/stddev = [\d\.]+/([\d\.]+)/[\d\.]+/[\d\.]+ ms",  # Windows avg line
             r"rtt min/avg/max/mdev = [\d\.]+/([\d\.]+)/[\d\.]+/[\d\.]+ ms",  # Unix avg line
         ]

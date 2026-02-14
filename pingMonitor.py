@@ -4,18 +4,26 @@ import tkinter as tk
 from queue import Queue
 import json
 import os
+import re
+import logging
 import tkinter.messagebox as messagebox
+from typing import Optional
 
 from ping_service import ping_once
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 class MonitorApp:
-    def __init__(self, master, ping_interval=10):
+    """A Tkinter-based application for monitoring network devices via ICMP ping."""
+
+    def __init__(self, master: tk.Tk, ping_interval: int = 10) -> None:
         self.master = master
         self.ping_interval = ping_interval
-        self.devices = []  # each item: {"name": str, "ip": str, "online": None|bool, "latency": None|float}
-        self.update_queue = Queue()
-        self.version = "0.1.0-beta"
+        self.devices: list[dict] = []
+        self.update_queue: Queue = Queue()
+        self.version = "0.1.1"
 
         self.master.title("Ping Monitor")
         self._build_ui()
@@ -94,10 +102,20 @@ class MonitorApp:
             f"Ping Monitor {self.version}\n\nDeveloped by Brennan Wade",
         )
 
+    @staticmethod
+    def _is_valid_ip(ip: str) -> bool:
+        ipv4_pattern = r"^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"
+        return bool(re.match(ipv4_pattern, ip))
+
     def _add_device(self):
         name = self.name_entry.get().strip()
         ip = self.ip_entry.get().strip()
         if not name or not ip:
+            return
+        if not self._is_valid_ip(ip):
+            messagebox.showerror(
+                "Invalid IP", "Please enter a valid IPv4 address (e.g., 192.168.1.1)"
+            )
             return
         device = {"name": name, "ip": ip, "online": None, "latency": None}
         self.devices.append(device)
@@ -234,8 +252,8 @@ class MonitorApp:
                             }
                         )
                 self._render_devices()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to load persisted devices: {e}")
 
     def _persist_devices(self, path: str = "devices.json"):
         to_save = [
@@ -246,8 +264,8 @@ class MonitorApp:
         try:
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(to_save, f, indent=2)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to persist devices: {e}")
 
     def _remove_device(self, index: int):
         if 0 <= index < len(self.devices):
@@ -256,15 +274,15 @@ class MonitorApp:
             self._render_devices()
 
 
-def main():
+def main() -> None:
+    """Initialize and run the PingMonitor application."""
     root = tk.Tk()
-    # Icon: try to set if icon exists; skip if not found
     try:
         icon_path = "pingMonitorICON.png"
         if os.path.exists(icon_path):
             root.iconphoto(True, tk.PhotoImage(file=icon_path))
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Failed to load application icon: {e}")
     app = MonitorApp(root, ping_interval=10)
     root.mainloop()
 
