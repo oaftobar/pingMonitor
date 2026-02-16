@@ -8,6 +8,7 @@ import re
 import logging
 import tkinter.messagebox as messagebox
 from typing import Optional
+from concurrent.futures import ThreadPoolExecutor
 
 from ping_service import ping_once
 
@@ -23,7 +24,7 @@ class MonitorApp:
         self.ping_interval = ping_interval
         self.devices: list[dict] = []
         self.update_queue: Queue = Queue()
-        self.version = "0.1.1"
+        self.version = "0.1.2"
 
         self.master.title("Ping Monitor")
         self._build_ui()
@@ -196,17 +197,30 @@ class MonitorApp:
         self.ping_thread.start()
         self._process_queue()
 
-    def _ping_loop(self):
+    def _ping_loop(self) -> None:
+        """Ping all devices in parallel using ThreadPoolExecutor."""
         while True:
-            for dev in self.devices:
-                ip = dev.get("ip", "")
-                if not ip:
-                    self.update_queue.put((dev, False, None))
-                    continue
-                res = ping_once(ip)
-                online = bool(res.get("online"))
-                latency = res.get("latency_ms")
-                self.update_queue.put((dev, online, latency))
+            if self.devices:
+                max_workers = min(len(self.devices), 10)
+                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    futures = {
+                        executor.submit(ping_once, dev.get("ip", "")): dev
+                        for dev in self.devices
+                    }
+                    for future in futures:
+                        dev = futures[future]
+                        ip = dev.get("ip", "")
+                        if not ip:
+                            self.update_queue.put((dev, False, None))
+                            continue
+                        try:
+                            res = future.result()
+                            online = bool(res.get("online"))
+                            latency = res.get("latency_ms")
+                            self.update_queue.put((dev, online, latency))
+                        except Exception as e:
+                            logger.warning(f"Ping failed for {ip}: {e}")
+                            self.update_queue.put((dev, False, None))
             time.sleep(self.ping_interval)
 
     def _process_queue(self):
