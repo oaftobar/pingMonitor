@@ -24,7 +24,8 @@ class MonitorApp:
         self.ping_interval = ping_interval
         self.devices: list[dict] = []
         self.update_queue: Queue = Queue()
-        self.version = "0.1.2"
+        self.device_widgets: dict = {}
+        self.version = "0.1.3"
 
         self.master.title("Ping Monitor")
         self._build_ui()
@@ -125,72 +126,100 @@ class MonitorApp:
         self.ip_entry.delete(0, tk.END)
         self._persist_devices()
 
-    def _render_devices(self):
-        # Clear existing data rows
-        for widget in self.status_frame.grid_slaves():
-            if int(widget.grid_info()["row"]) >= self.rows_start:
-                widget.destroy()
-
-        # Render each device row
+    def _render_devices(self) -> None:
+        """Update device rows in-place without destroying/recreating widgets."""
+        # First: update existing widgets
         for idx, dev in enumerate(self.devices):
-            row = self.rows_start + idx
-            name_lbl = tk.Label(
-                self.status_frame,
-                text=dev["name"],
-                borderwidth=1,
-                relief="solid",
-                width=20,
-            )
-            ip_lbl = tk.Label(
-                self.status_frame,
-                text=dev["ip"],
-                borderwidth=1,
-                relief="solid",
-                width=20,
-            )
-            status_txt = (
-                "Unknown"
-                if dev["online"] is None
-                else ("Online" if dev["online"] else "Offline")
-            )
-            status_lbl = tk.Label(
-                self.status_frame,
-                text=status_txt,
-                borderwidth=1,
-                relief="solid",
-                width=20,
-            )
-            color = (
-                "gray"
-                if dev["online"] is None
-                else ("green" if dev["online"] else "red")
-            )
-            status_lbl.config(bg=color)
+            if idx in self.device_widgets:
+                widgets = self.device_widgets[idx]
+                widgets["name"].config(text=dev["name"])
+                widgets["ip"].config(text=dev["ip"])
 
-            name_lbl.grid(row=row, column=0, sticky="ew")
-            ip_lbl.grid(row=row, column=1, sticky="ew")
-            status_lbl.grid(row=row, column=2, sticky="ew")
-            # Latency column
-            latency = dev.get("latency")
-            latency_text = "" if latency is None else f"{latency:.0f} ms"
-            latency_lbl = tk.Label(
-                self.status_frame,
-                text=latency_text,
-                borderwidth=1,
-                relief="solid",
-                width=20,
-            )
-            latency_lbl.grid(row=row, column=3, sticky="ew")
-            dev.setdefault("widgets", {})["latency"] = latency_lbl
+                status_txt = (
+                    "Unknown"
+                    if dev["online"] is None
+                    else ("Online" if dev["online"] else "Offline")
+                )
+                color = (
+                    "gray"
+                    if dev["online"] is None
+                    else ("green" if dev["online"] else "red")
+                )
+                widgets["status"].config(text=status_txt, bg=color)
 
-            dev.setdefault("widgets", {})["status"] = status_lbl
-            # Remove button
-            remove_btn = tk.Button(
-                self.status_frame,
-                text="Remove",
-                command=lambda i=idx: self._remove_device(i),
-            )
-            remove_btn.grid(row=row, column=4, sticky="ew")
+                latency_text = (
+                    "" if dev.get("latency") is None else f"{dev['latency']:.0f} ms"
+                )
+                widgets["latency"].config(text=latency_text)
+
+        # Second: remove widgets for deleted devices
+        for idx in list(self.device_widgets.keys()):
+            if idx >= len(self.devices):
+                for widget in self.device_widgets[idx].values():
+                    widget.destroy()
+                del self.device_widgets[idx]
+
+        # Third: create new widgets for new devices
+        for idx, dev in enumerate(self.devices):
+            if idx not in self.device_widgets:
+                self.device_widgets[idx] = self._create_device_row(idx, dev)
+
+    def _create_device_row(self, idx: int, dev: dict) -> dict:
+        """Create a new device row and return widget references."""
+        row = self.rows_start + idx
+
+        name_lbl = tk.Label(
+            self.status_frame, text=dev["name"], borderwidth=1, relief="solid", width=20
+        )
+        ip_lbl = tk.Label(
+            self.status_frame, text=dev["ip"], borderwidth=1, relief="solid", width=20
+        )
+
+        status_txt = (
+            "Unknown"
+            if dev["online"] is None
+            else ("Online" if dev["online"] else "Offline")
+        )
+        color = (
+            "gray" if dev["online"] is None else ("green" if dev["online"] else "red")
+        )
+        status_lbl = tk.Label(
+            self.status_frame,
+            text=status_txt,
+            borderwidth=1,
+            relief="solid",
+            width=20,
+            bg=color,
+        )
+
+        latency_text = "" if dev.get("latency") is None else f"{dev['latency']:.0f} ms"
+        latency_lbl = tk.Label(
+            self.status_frame,
+            text=latency_text,
+            borderwidth=1,
+            relief="solid",
+            width=20,
+        )
+
+        remove_btn = tk.Button(
+            self.status_frame,
+            text="Remove",
+            command=lambda i=idx: self._remove_device(i),
+        )
+
+        name_lbl.grid(row=row, column=0, sticky="ew")
+        ip_lbl.grid(row=row, column=1, sticky="ew")
+        status_lbl.grid(row=row, column=2, sticky="ew")
+        latency_lbl.grid(row=row, column=3, sticky="ew")
+        remove_btn.grid(row=row, column=4, sticky="ew")
+
+        return {
+            "name": name_lbl,
+            "ip": ip_lbl,
+            "status": status_lbl,
+            "latency": latency_lbl,
+            "remove": remove_btn,
+        }
 
     def _start_ping_loop(self):
         self.ping_thread = threading.Thread(target=self._ping_loop, daemon=True)
