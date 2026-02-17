@@ -25,7 +25,7 @@ class MonitorApp:
         self.devices: list[dict] = []
         self.update_queue: Queue = Queue()
         self.device_widgets: dict = {}
-        self.version = "0.1.3"
+        self.version = "0.1.4"
 
         self.master.title("Ping Monitor")
         self._build_ui()
@@ -252,7 +252,8 @@ class MonitorApp:
                             self.update_queue.put((dev, False, None))
             time.sleep(self.ping_interval)
 
-    def _process_queue(self):
+    def _process_queue(self) -> None:
+        """Process ping results from queue with adaptive polling."""
         updated = False
         while not self.update_queue.empty():
             dev, online, latency = self.update_queue.get()
@@ -261,9 +262,15 @@ class MonitorApp:
             if latency is not None:
                 self._persist_devices()
             updated = True
+
         if updated:
             self._render_devices()
-        self.master.after(500, self._process_queue)
+
+        # Adaptive polling: check more frequently when queue has items
+        if not self.update_queue.empty():
+            self.master.after(50, self._process_queue)
+        else:
+            self.master.after(500, self._process_queue)
 
     def _apply_interval(self):
         selected_label = self.interval_var.get()
