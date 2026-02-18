@@ -4,6 +4,19 @@ import re
 from typing import Dict, Any
 
 
+def is_valid_ip(ip: str) -> bool:
+    """Validate IPv4 address format.
+
+    Args:
+        ip: String to validate as IPv4 address
+
+    Returns:
+        True if valid IPv4 format, False otherwise
+    """
+    ipv4_pattern = r"^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"
+    return bool(re.match(ipv4_pattern, ip))
+
+
 def ping_once(ip: str) -> Dict[str, Any]:
     """Ping a single IP and return a small status object.
 

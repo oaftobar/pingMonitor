@@ -10,7 +10,7 @@ import tkinter.messagebox as messagebox
 from typing import Optional
 from concurrent.futures import ThreadPoolExecutor
 
-from ping_service import ping_once
+from ping_service import ping_once, is_valid_ip
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -25,7 +25,7 @@ class MonitorApp:
         self.devices: list[dict] = []
         self.update_queue: Queue = Queue()
         self.device_widgets: dict = {}
-        self.version = "0.1.4"
+        self.version = "0.1.5"
 
         self.master.title("Ping Monitor")
         self._build_ui()
@@ -104,17 +104,12 @@ class MonitorApp:
             f"Ping Monitor {self.version}\n\nDeveloped by Brennan Wade",
         )
 
-    @staticmethod
-    def _is_valid_ip(ip: str) -> bool:
-        ipv4_pattern = r"^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"
-        return bool(re.match(ipv4_pattern, ip))
-
     def _add_device(self):
         name = self.name_entry.get().strip()
         ip = self.ip_entry.get().strip()
         if not name or not ip:
             return
-        if not self._is_valid_ip(ip):
+        if not is_valid_ip(ip):
             messagebox.showerror(
                 "Invalid IP", "Please enter a valid IPv4 address (e.g., 192.168.1.1)"
             )
