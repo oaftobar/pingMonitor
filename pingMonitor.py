@@ -26,7 +26,7 @@ class MonitorApp:
         self.devices: list[dict] = []
         self.update_queue: Queue = Queue()
         self.device_widgets: dict = {}
-        self.version = "0.2.0"
+        self.version = "0.2.1"
 
         self.master.title("Ping Monitor")
         self._build_ui()
@@ -125,6 +125,9 @@ class MonitorApp:
             messagebox.showerror(
                 "Invalid IP", "Please enter a valid IPv4 address (e.g., 192.168.1.1)"
             )
+            return
+        if any(d.get("ip") == ip for d in self.devices):
+            messagebox.showerror("Duplicate IP", "A device with this IP already exists")
             return
         device = {"name": name, "ip": ip, "online": None, "latency": None}
         self.devices.append(device)
