@@ -26,7 +26,8 @@ class MonitorApp:
         self.devices: list[dict] = []
         self.update_queue: Queue = Queue()
         self.device_widgets: dict = {}
-        self.version = "0.2.1"
+        self._needs_persist = False
+        self.version = "0.2.2"
 
         self.master.title("Ping Monitor")
         self._build_ui()
@@ -270,8 +271,13 @@ class MonitorApp:
             dev["online"] = online
             dev["latency"] = latency
             if latency is not None:
-                self._persist_devices()
+                self._needs_persist = True
             updated = True
+
+        # Persist once per cycle if any device was updated
+        if updated and self._needs_persist:
+            self._persist_devices()
+            self._needs_persist = False
 
         if updated:
             self._render_devices()
