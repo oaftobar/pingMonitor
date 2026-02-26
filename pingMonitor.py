@@ -27,15 +27,12 @@ class MonitorApp:
         self.update_queue: Queue = Queue()
         self.device_widgets: dict = {}
         self._needs_persist = False
-        self.version = "0.2.2"
+        self.version = "0.2.3"
 
         self.master.title("Ping Monitor")
         self._build_ui()
         self._load_persisted_devices()
         self._start_ping_loop()
-
-        # Override close button to minimize to tray
-        self.master.protocol("WM_DELETE_WINDOW", self._minimize_to_tray)
 
     def _build_ui(self):
         # Menu bar
@@ -339,41 +336,8 @@ class MonitorApp:
             self._persist_devices()
             self._render_devices()
 
-    def _minimize_to_tray(self) -> None:
-        """Minimize to system tray instead of closing."""
-        self.master.withdraw()
-        self._create_tray_icon()
-
-    def _create_tray_icon(self) -> None:
-        """Create system tray icon with context menu."""
-        self.tray_menu = tk.Menu(None, tearoff=0)
-        self.tray_menu.add_command(label="Show", command=self._show_from_tray)
-        self.tray_menu.add_command(label="Quit", command=self._quit_app)
-
-        # Show a small window as tray indicator (fallback)
-        self.tray_window = tk.Toplevel(self.master)
-        self.tray_window.title("Ping Monitor")
-        self.tray_window.geometry("200x50")
-        self.tray_window.resizable(False, False)
-        self.tray_window.attributes("-topmost", True)
-
-        tk.Label(self.tray_window, text="Ping Monitor (running in background)").pack(
-            pady=10
-        )
-        tk.Button(self.tray_window, text="Show", command=self._show_from_tray).pack()
-        tk.Button(self.tray_window, text="Quit", command=self._quit_app).pack()
-
-    def _show_from_tray(self) -> None:
-        """Restore window from tray."""
-        if hasattr(self, "tray_window") and self.tray_window:
-            self.tray_window.destroy()
-        self.master.deiconify()
-        self.master.lift()
-
     def _quit_app(self) -> None:
-        """Actually quit the application."""
-        if hasattr(self, "tray_window") and self.tray_window:
-            self.tray_window.destroy()
+        """Quit the application."""
         sys.exit()
 
     def _export_devices(self) -> None:
