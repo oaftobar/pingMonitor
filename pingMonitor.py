@@ -25,6 +25,7 @@ class MonitorApp:
         ("60 seconds", 60),
         ("5 minutes", 300),
     ]
+    TABLE_HEADERS = ["Name", "IP", "Status", "Latency", "Actions"]
 
     def __init__(self, master: tk.Tk, ping_interval: int = 10) -> None:
         self.master = master
@@ -33,7 +34,7 @@ class MonitorApp:
         self.update_queue: Queue = Queue()
         self.device_widgets: dict = {}
         self._needs_persist = False
-        self.version = "0.2.10"
+        self.version = "0.2.11"
 
         self.master.title("Ping Monitor")
         self._build_ui()
@@ -96,8 +97,7 @@ class MonitorApp:
         self.status_frame.pack(fill=tk.BOTH, expand=True, padx=8, pady=6)
 
         # Header
-        header = ["Name", "IP", "Status", "Latency", "Actions"]
-        for i, h in enumerate(header):
+        for i, h in enumerate(self.TABLE_HEADERS):
             tk.Label(
                 self.status_frame,
                 text=h,
@@ -232,7 +232,7 @@ class MonitorApp:
             "remove": remove_btn,
         }
 
-    def _start_ping_loop(self):
+    def _start_ping_loop(self) -> None:
         self.ping_thread = threading.Thread(target=self._ping_loop, daemon=True)
         self.ping_thread.start()
         self._process_queue()
@@ -288,7 +288,7 @@ class MonitorApp:
         else:
             self.master.after(500, self._process_queue)
 
-    def _apply_interval(self):
+    def _apply_interval(self) -> None:
         selected_label = self.interval_var.get()
         mapping = {label: value for label, value in self.PING_INTERVALS}
         new_interval = mapping.get(selected_label, 10)
@@ -332,7 +332,7 @@ class MonitorApp:
         except Exception as e:
             logger.warning(f"Failed to persist devices: {e}")
 
-    def _remove_device(self, index: int):
+    def _remove_device(self, index: int) -> None:
         if 0 <= index < len(self.devices):
             self.devices.pop(index)
             self._persist_devices()
