@@ -33,7 +33,7 @@ class MonitorApp:
         self.update_queue: Queue = Queue()
         self.device_widgets: dict = {}
         self._needs_persist = False
-        self.version = "0.2.9"
+        self.version = "0.2.10"
 
         self.master.title("Ping Monitor")
         self._build_ui()
@@ -151,9 +151,7 @@ class MonitorApp:
                 status_txt, color = self._get_status_info(dev.get("online"))
                 widgets["status"].config(text=status_txt, bg=color)
 
-                latency_text = (
-                    "" if dev.get("latency") is None else f"{dev['latency']:.0f} ms"
-                )
+                latency_text = self._format_latency(dev.get("latency"))
                 widgets["latency"].config(text=latency_text)
 
         # Second: remove widgets for deleted devices
@@ -177,7 +175,12 @@ class MonitorApp:
         """
         if online is None:
             return "Unknown", "gray"
-        return "Online" if online else "Offline", "green" if online else "red"
+        return ("Online", "green") if online else ("Offline", "red")
+
+    @staticmethod
+    def _format_latency(latency: float | None) -> str:
+        """Format latency for display."""
+        return "" if latency is None else f"{latency:.0f} ms"
 
     def _create_device_row(self, idx: int, dev: dict) -> dict:
         """Create a new device row and return widget references."""
@@ -200,7 +203,7 @@ class MonitorApp:
             bg=color,
         )
 
-        latency_text = "" if dev.get("latency") is None else f"{dev['latency']:.0f} ms"
+        latency_text = self._format_latency(dev.get("latency"))
         latency_lbl = tk.Label(
             self.status_frame,
             text=latency_text,
@@ -301,15 +304,18 @@ class MonitorApp:
                 data = json.load(f)
             if isinstance(data, list):
                 for item in data:
-                    if isinstance(item, dict) and item.get("ip"):
-                        self.devices.append(
-                            {
-                                "name": item.get("name", ""),
-                                "ip": item["ip"],
-                                "online": None,
-                                "latency": None,
-                            }
-                        )
+                    if isinstance(item, dict):
+                        ip = item.get("ip", "").strip()
+                        name = item.get("name", "").strip()
+                        if ip and is_valid_ip(ip) and name:
+                            self.devices.append(
+                                {
+                                    "name": name,
+                                    "ip": ip,
+                                    "online": None,
+                                    "latency": None,
+                                }
+                            )
                 self._render_devices()
         except Exception as e:
             logger.warning(f"Failed to load persisted devices: {e}")
@@ -435,7 +441,7 @@ def main() -> None:
             root.iconphoto(True, tk.PhotoImage(file=icon_path))
     except Exception as e:
         logger.warning(f"Failed to load application icon: {e}")
-    app = MonitorApp(root, ping_interval=10)
+    MonitorApp(root, ping_interval=10)
     root.mainloop()
 
 
