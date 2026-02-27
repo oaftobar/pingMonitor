@@ -26,7 +26,7 @@ class MonitorApp:
         self.update_queue: Queue = Queue()
         self.device_widgets: dict = {}
         self._needs_persist = False
-        self.version = "0.2.5"
+        self.version = "0.2.6"
 
         self.master.title("Ping Monitor")
         self._build_ui()
@@ -384,24 +384,50 @@ class MonitorApp:
 
             existing_ips = {d.get("ip") for d in self.devices}
             imported_count = 0
+            skipped_count = 0
 
             for item in data:
-                if isinstance(item, dict) and item.get("ip"):
-                    if item["ip"] not in existing_ips:
-                        self.devices.append(
-                            {
-                                "name": item.get("name", ""),
-                                "ip": item["ip"],
-                                "online": None,
-                                "latency": None,
-                            }
-                        )
-                        existing_ips.add(item["ip"])
-                        imported_count += 1
+                if not isinstance(item, dict):
+                    skipped_count += 1
+                    continue
+
+                ip = item.get("ip", "").strip()
+                name = item.get("name", "").strip()
+
+                # Validate IP format
+                if not ip or not is_valid_ip(ip):
+                    skipped_count += 1
+                    continue
+
+                # Validate name
+                if not name:
+                    skipped_count += 1
+                    continue
+
+                # Check for duplicates
+                if ip not in existing_ips:
+                    self.devices.append(
+                        {
+                            "name": name,
+                            "ip": ip,
+                            "online": None,
+                            "latency": None,
+                        }
+                    )
+                    existing_ips.add(ip)
+                    imported_count += 1
+                else:
+                    skipped_count += 1
 
             self._persist_devices()
             self._render_devices()
-            messagebox.showinfo("Success", f"Imported {imported_count} devices")
+            if skipped_count > 0:
+                messagebox.showinfo(
+                    "Import Complete",
+                    f"Imported {imported_count} devices, skipped {skipped_count} invalid/duplicate entries",
+                )
+            else:
+                messagebox.showinfo("Success", f"Imported {imported_count} devices")
         except Exception as e:
             logger.warning(f"Failed to import devices: {e}")
             messagebox.showerror("Error", f"Failed to import: {e}")
