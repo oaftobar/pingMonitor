@@ -26,7 +26,7 @@ class MonitorApp:
         self.update_queue: Queue = Queue()
         self.device_widgets: dict = {}
         self._needs_persist = False
-        self.version = "0.2.6"
+        self.version = "0.2.7"
 
         self.master.title("Ping Monitor")
         self._build_ui()
@@ -146,16 +146,7 @@ class MonitorApp:
                 widgets["name"].config(text=dev["name"])
                 widgets["ip"].config(text=dev["ip"])
 
-                status_txt = (
-                    "Unknown"
-                    if dev["online"] is None
-                    else ("Online" if dev["online"] else "Offline")
-                )
-                color = (
-                    "gray"
-                    if dev["online"] is None
-                    else ("green" if dev["online"] else "red")
-                )
+                status_txt, color = self._get_status_info(dev.get("online"))
                 widgets["status"].config(text=status_txt, bg=color)
 
                 latency_text = (
@@ -175,6 +166,17 @@ class MonitorApp:
             if idx not in self.device_widgets:
                 self.device_widgets[idx] = self._create_device_row(idx, dev)
 
+    @staticmethod
+    def _get_status_info(online: bool | None) -> tuple[str, str]:
+        """Get status text and color for a device.
+
+        Returns:
+            Tuple of (status_text, background_color)
+        """
+        if online is None:
+            return "Unknown", "gray"
+        return "Online" if online else "Offline", "green" if online else "red"
+
     def _create_device_row(self, idx: int, dev: dict) -> dict:
         """Create a new device row and return widget references."""
         row = self.rows_start + idx
@@ -186,14 +188,7 @@ class MonitorApp:
             self.status_frame, text=dev["ip"], borderwidth=1, relief="solid", width=20
         )
 
-        status_txt = (
-            "Unknown"
-            if dev["online"] is None
-            else ("Online" if dev["online"] else "Offline")
-        )
-        color = (
-            "gray" if dev["online"] is None else ("green" if dev["online"] else "red")
-        )
+        status_txt, color = self._get_status_info(dev.get("online"))
         status_lbl = tk.Label(
             self.status_frame,
             text=status_txt,
