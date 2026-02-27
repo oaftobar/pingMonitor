@@ -8,7 +8,6 @@ import os
 import sys
 import logging
 import tkinter.messagebox as messagebox
-from typing import Optional
 from concurrent.futures import ThreadPoolExecutor
 
 from ping_service import ping_once, is_valid_ip
@@ -27,7 +26,7 @@ class MonitorApp:
         self.update_queue: Queue = Queue()
         self.device_widgets: dict = {}
         self._needs_persist = False
-        self.version = "0.2.3"
+        self.version = "0.2.4"
 
         self.master.title("Ping Monitor")
         self._build_ui()
