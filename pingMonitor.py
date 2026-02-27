@@ -20,6 +20,11 @@ class MonitorApp:
     """A Tkinter-based application for monitoring network devices via ICMP ping."""
 
     MAX_PING_WORKERS = 10
+    PING_INTERVALS = [
+        ("10 seconds", 10),
+        ("60 seconds", 60),
+        ("5 minutes", 300),
+    ]
 
     def __init__(self, master: tk.Tk, ping_interval: int = 10) -> None:
         self.master = master
@@ -28,7 +33,7 @@ class MonitorApp:
         self.update_queue: Queue = Queue()
         self.device_widgets: dict = {}
         self._needs_persist = False
-        self.version = "0.2.8"
+        self.version = "0.2.9"
 
         self.master.title("Ping Monitor")
         self._build_ui()
@@ -75,13 +80,8 @@ class MonitorApp:
             row=0, column=0, padx=4, sticky="e"
         )
         self.interval_var = tk.StringVar()
-        options = [
-            ("10 seconds", 10),
-            ("60 seconds", 60),
-            ("5 minutes", 300),
-        ]
         menu = tk.OptionMenu(
-            interval_frame, self.interval_var, *[opt for opt, _ in options]
+            interval_frame, self.interval_var, *[opt for opt, _ in self.PING_INTERVALS]
         )
         menu.grid(row=0, column=1, padx=4, sticky="w")
         self.interval_var.set("10 seconds")  # default
@@ -287,11 +287,7 @@ class MonitorApp:
 
     def _apply_interval(self):
         selected_label = self.interval_var.get()
-        mapping = {
-            "10 seconds": 10,
-            "60 seconds": 60,
-            "5 minutes": 300,
-        }
+        mapping = {label: value for label, value in self.PING_INTERVALS}
         new_interval = mapping.get(selected_label, 10)
         if new_interval != self.ping_interval:
             self.ping_interval = new_interval
