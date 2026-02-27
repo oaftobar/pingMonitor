@@ -19,6 +19,8 @@ logger = logging.getLogger(__name__)
 class MonitorApp:
     """A Tkinter-based application for monitoring network devices via ICMP ping."""
 
+    MAX_PING_WORKERS = 10
+
     def __init__(self, master: tk.Tk, ping_interval: int = 10) -> None:
         self.master = master
         self.ping_interval = ping_interval
@@ -26,7 +28,7 @@ class MonitorApp:
         self.update_queue: Queue = Queue()
         self.device_widgets: dict = {}
         self._needs_persist = False
-        self.version = "0.2.7"
+        self.version = "0.2.8"
 
         self.master.title("Ping Monitor")
         self._build_ui()
@@ -236,7 +238,7 @@ class MonitorApp:
         """Ping all devices in parallel using ThreadPoolExecutor."""
         while True:
             if self.devices:
-                max_workers = min(len(self.devices), 10)
+                max_workers = min(len(self.devices), self.MAX_PING_WORKERS)
                 with ThreadPoolExecutor(max_workers=max_workers) as executor:
                     futures = {
                         executor.submit(ping_once, dev.get("ip", "")): dev
