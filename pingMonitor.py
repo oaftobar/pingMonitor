@@ -26,7 +26,7 @@ class MonitorApp:
         self.update_queue: Queue = Queue()
         self.device_widgets: dict = {}
         self._needs_persist = False
-        self.version = "0.2.4"
+        self.version = "0.2.5"
 
         self.master.title("Ping Monitor")
         self._build_ui()
@@ -116,7 +116,11 @@ class MonitorApp:
     def _add_device(self):
         name = self.name_entry.get().strip()
         ip = self.ip_entry.get().strip()
-        if not name or not ip:
+        if not name:
+            messagebox.showerror("Invalid Name", "Please enter a device name")
+            return
+        if not ip:
+            messagebox.showerror("Invalid IP", "Please enter an IP address")
             return
         if not is_valid_ip(ip):
             messagebox.showerror(
