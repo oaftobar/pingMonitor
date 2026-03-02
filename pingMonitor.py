@@ -34,14 +34,14 @@ class MonitorApp:
         self.update_queue: Queue = Queue()
         self.device_widgets: dict = {}
         self._needs_persist = False
-        self.version = "0.2.11"
+        self.version = "0.2.12"
 
         self.master.title("Ping Monitor")
         self._build_ui()
         self._load_persisted_devices()
         self._start_ping_loop()
 
-    def _build_ui(self):
+    def _build_ui(self) -> None:
         # Menu bar
         menubar = tk.Menu(self.master)
         self.master.config(menu=menubar)
@@ -109,13 +109,13 @@ class MonitorApp:
 
         self.rows_start = 1  # data rows start
 
-    def _show_about(self):
+    def _show_about(self) -> None:
         messagebox.showinfo(
             "About",
             f"Ping Monitor {self.version}\n\nDeveloped by Brennan Wade",
         )
 
-    def _add_device(self):
+    def _add_device(self) -> None:
         name = self.name_entry.get().strip()
         ip = self.ip_entry.get().strip()
         if not name:
@@ -320,7 +320,7 @@ class MonitorApp:
         except Exception as e:
             logger.warning(f"Failed to load persisted devices: {e}")
 
-    def _persist_devices(self, path: str = "devices.json"):
+    def _persist_devices(self, path: str = "devices.json") -> None:
         to_save = [
             {"name": d.get("name", ""), "ip": d.get("ip", "")}
             for d in self.devices
