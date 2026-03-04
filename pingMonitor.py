@@ -20,12 +20,13 @@ class MonitorApp:
     """A Tkinter-based application for monitoring network devices via ICMP ping."""
 
     MAX_PING_WORKERS = 10
+    MAX_PING_HISTORY = 100
     PING_INTERVALS = [
         ("10 seconds", 10),
         ("60 seconds", 60),
         ("5 minutes", 300),
     ]
-    TABLE_HEADERS = ["Name", "IP", "Status", "Latency", "Actions"]
+    TABLE_HEADERS = ["Name", "IP", "Status", "Latency", "Actions", "History"]
 
     def __init__(self, master: tk.Tk, ping_interval: int = 10) -> None:
         self.master = master
@@ -34,12 +35,21 @@ class MonitorApp:
         self.update_queue: Queue = Queue()
         self.device_widgets: dict = {}
         self._needs_persist = False
-        self.version = "0.2.12"
+        self.version = "0.3.0"
 
         self.master.title("Ping Monitor")
         self._build_ui()
         self._load_persisted_devices()
         self._start_ping_loop()
+
+        # Keyboard shortcuts
+        self.master.bind("<Command-q>", lambda e: self._quit_app())
+        self.master.bind("<Control-q>", lambda e: self._quit_app())
+
+    def _clear_inputs(self) -> None:
+        """Clear the name and IP input fields."""
+        self.name_entry.delete(0, tk.END)
+        self.ip_entry.delete(0, tk.END)
 
     def _build_ui(self) -> None:
         # Menu bar
@@ -65,10 +75,14 @@ class MonitorApp:
         tk.Label(input_frame, text="Name").grid(row=0, column=0, padx=4)
         self.name_entry = tk.Entry(input_frame)
         self.name_entry.grid(row=0, column=1, padx=4)
+        self.name_entry.bind("<Return>", lambda e: self._add_device())
+        self.name_entry.bind("<Escape>", lambda e: self._clear_inputs())
 
         tk.Label(input_frame, text="IP").grid(row=0, column=2, padx=4)
         self.ip_entry = tk.Entry(input_frame)
         self.ip_entry.grid(row=0, column=3, padx=4)
+        self.ip_entry.bind("<Return>", lambda e: self._add_device())
+        self.ip_entry.bind("<Escape>", lambda e: self._clear_inputs())
 
         add_btn = tk.Button(input_frame, text="Add Device", command=self._add_device)
         add_btn.grid(row=0, column=4, padx=4)
@@ -132,11 +146,16 @@ class MonitorApp:
         if any(d.get("ip") == ip for d in self.devices):
             messagebox.showerror("Duplicate IP", "A device with this IP already exists")
             return
-        device = {"name": name, "ip": ip, "online": None, "latency": None}
+        device = {
+            "name": name,
+            "ip": ip,
+            "online": None,
+            "latency": None,
+            "history": [],
+        }
         self.devices.append(device)
         self._render_devices()
-        self.name_entry.delete(0, tk.END)
-        self.ip_entry.delete(0, tk.END)
+        self._clear_inputs()
         self._persist_devices()
 
     def _render_devices(self) -> None:
@@ -218,11 +237,18 @@ class MonitorApp:
             command=lambda i=idx: self._remove_device(i),
         )
 
+        history_btn = tk.Button(
+            self.status_frame,
+            text="History",
+            command=lambda i=idx: self._show_history(i),
+        )
+
         name_lbl.grid(row=row, column=0, sticky="ew")
         ip_lbl.grid(row=row, column=1, sticky="ew")
         status_lbl.grid(row=row, column=2, sticky="ew")
         latency_lbl.grid(row=row, column=3, sticky="ew")
         remove_btn.grid(row=row, column=4, sticky="ew")
+        history_btn.grid(row=row, column=5, sticky="ew")
 
         return {
             "name": name_lbl,
@@ -265,11 +291,24 @@ class MonitorApp:
 
     def _process_queue(self) -> None:
         """Process ping results from queue with adaptive polling."""
+        import time as time_module
+
         updated = False
         while not self.update_queue.empty():
             dev, online, latency = self.update_queue.get()
             dev["online"] = online
             dev["latency"] = latency
+
+            # Add to history
+            history = dev.get("history", [])
+            history.append(
+                {"timestamp": time_module.time(), "online": online, "latency": latency}
+            )
+            # Cap history at MAX_PING_HISTORY
+            if len(history) > self.MAX_PING_HISTORY:
+                history = history[-self.MAX_PING_HISTORY :]
+            dev["history"] = history
+
             if latency is not None:
                 self._needs_persist = True
             updated = True
@@ -314,6 +353,7 @@ class MonitorApp:
                                     "ip": ip,
                                     "online": None,
                                     "latency": None,
+                                    "history": [],
                                 }
                             )
                 self._render_devices()
@@ -337,6 +377,66 @@ class MonitorApp:
             self.devices.pop(index)
             self._persist_devices()
             self._render_devices()
+
+    def _show_history(self, index: int) -> None:
+        """Show ping history for a device."""
+        if index >= len(self.devices):
+            return
+
+        dev = self.devices[index]
+        history = dev.get("history", [])
+
+        if not history:
+            messagebox.showinfo("History", f"No history for {dev['name']} yet")
+            return
+
+        # Calculate stats
+        total = len(history)
+        online_count = sum(1 for h in history if h.get("online"))
+        uptime_pct = (online_count / total) * 100 if total > 0 else 0
+
+        latencies = [h["latency"] for h in history if h.get("latency") is not None]
+        avg_latency = sum(latencies) / len(latencies) if latencies else 0
+        min_latency = min(latencies) if latencies else 0
+        max_latency = max(latencies) if latencies else 0
+
+        # Build history text
+        history_lines = []
+        import time as time_module
+
+        for h in reversed(history[-10:]):  # Last 10 pings
+            timestamp = time_module.strftime(
+                "%H:%M:%S", time_module.localtime(h["timestamp"])
+            )
+            status = "Online" if h.get("online") else "Offline"
+            latency_str = f"{h['latency']:.0f}ms" if h.get("latency") else "N/A"
+            history_lines.append(f"{timestamp}: {status} ({latency_str})")
+
+        history_text = "\n".join(history_lines)
+
+        stats_text = f"""Device: {dev["name"]} ({dev["ip"]})
+
+Statistics:
+- Total pings: {total}
+- Uptime: {uptime_pct:.1f}%
+- Avg latency: {avg_latency:.0f}ms
+- Min latency: {min_latency:.0f}ms
+- Max latency: {max_latency:.0f}ms
+
+Last 10 pings:
+{history_text}"""
+
+        # Show popup
+        popup = tk.Toplevel(self.master)
+        popup.title(f"History - {dev['name']}")
+        popup.geometry("400x450")
+
+        text_widget = tk.Text(popup, wrap=tk.WORD, padx=10, pady=10)
+        text_widget.insert("1.0", stats_text)
+        text_widget.config(state="disabled")
+        text_widget.pack(fill=tk.BOTH, expand=True)
+
+        tk.Button(popup, text="Close", command=popup.destroy).pack(pady=5)
 
     def _quit_app(self) -> None:
         """Quit the application."""
@@ -411,6 +511,7 @@ class MonitorApp:
                             "ip": ip,
                             "online": None,
                             "latency": None,
+                            "history": [],
                         }
                     )
                     existing_ips.add(ip)
