@@ -35,7 +35,7 @@ class MonitorApp:
         self.update_queue: Queue = Queue()
         self.device_widgets: dict = {}
         self._needs_persist = False
-        self.version = "0.3.1"
+        self.version = "0.3.2"
 
         self.master.title("Ping Monitor")
         self._build_ui()
@@ -45,6 +45,8 @@ class MonitorApp:
         # Keyboard shortcuts
         self.master.bind("<Command-q>", lambda e: self._quit_app())
         self.master.bind("<Control-q>", lambda e: self._quit_app())
+        self.master.bind("<Command-w>", lambda e: self.master.destroy())
+        self.master.bind("<Control-w>", lambda e: self.master.destroy())
 
     def _clear_inputs(self) -> None:
         """Clear the name and IP input fields."""
@@ -145,7 +147,9 @@ class MonitorApp:
                 data = json.loads(response.read())
 
             latest = data.get("tag_name", "v0.0.0").lstrip("v")
-            release_url = data.get("html_url", "")
+            release_url = data.get(
+                "html_url", "https://github.com/oaftobar/pingMonitor/releases"
+            )
 
             if latest > self.version:
                 response = messagebox.askyesno(
