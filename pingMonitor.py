@@ -35,7 +35,7 @@ class MonitorApp:
         self.update_queue: Queue = Queue()
         self.device_widgets: dict = {}
         self._needs_persist = False
-        self.version = "0.3.0"
+        self.version = "0.3.1"
 
         self.master.title("Ping Monitor")
         self._build_ui()
@@ -67,6 +67,9 @@ class MonitorApp:
         help_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Help", menu=help_menu)
         help_menu.add_command(label="About", command=self._show_about)
+        help_menu.add_command(
+            label="Check for Updates", command=self._check_for_updates
+        )
 
         # Input frame
         input_frame = tk.Frame(self.master)
@@ -128,6 +131,40 @@ class MonitorApp:
             "About",
             f"Ping Monitor {self.version}\n\nDeveloped by Brennan Wade",
         )
+
+    def _check_for_updates(self) -> None:
+        """Check GitHub for latest version and show update dialog."""
+        import urllib.request
+        import json
+        import webbrowser
+
+        url = "https://api.github.com/repos/oaftobar/pingMonitor/releases/latest"
+
+        try:
+            with urllib.request.urlopen(url, timeout=5) as response:
+                data = json.loads(response.read())
+
+            latest = data.get("tag_name", "v0.0.0").lstrip("v")
+            release_url = data.get("html_url", "")
+
+            if latest > self.version:
+                response = messagebox.askyesno(
+                    "Update Available",
+                    f"You're on v{self.version}.\n"
+                    f"v{latest} is available.\n\n"
+                    "Open download page?",
+                )
+                if response:
+                    webbrowser.open(release_url)
+            else:
+                messagebox.showinfo(
+                    "Up to Date", f"You're on v{self.version}, the latest version!"
+                )
+        except Exception as e:
+            logger.warning(f"Failed to check for updates: {e}")
+            messagebox.showinfo(
+                "Updates", "Unable to check for updates. Please try again later."
+            )
 
     def _add_device(self) -> None:
         name = self.name_entry.get().strip()
