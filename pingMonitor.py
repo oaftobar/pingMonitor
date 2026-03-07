@@ -35,18 +35,52 @@ class MonitorApp:
         self.update_queue: Queue = Queue()
         self.device_widgets: dict = {}
         self._needs_persist = False
-        self.version = "0.3.2"
+        self.version = "0.3.3"
 
         self.master.title("Ping Monitor")
+        self._load_window_geometry()
         self._build_ui()
         self._load_persisted_devices()
         self._start_ping_loop()
+        self._save_window_geometry_on_close()
 
         # Keyboard shortcuts
         self.master.bind("<Command-q>", lambda e: self._quit_app())
         self.master.bind("<Control-q>", lambda e: self._quit_app())
         self.master.bind("<Command-w>", lambda e: self.master.destroy())
         self.master.bind("<Control-w>", lambda e: self.master.destroy())
+
+    def _load_window_geometry(self) -> None:
+        """Load and apply window geometry from config file."""
+        config_path = "config.json"
+        try:
+            if os.path.exists(config_path):
+                with open(config_path, "r") as f:
+                    config = json.load(f)
+                geometry = config.get("window_geometry")
+                if geometry:
+                    self.master.geometry(geometry)
+        except Exception as e:
+            logger.warning(f"Failed to load window geometry: {e}")
+
+    def _save_window_geometry_on_close(self) -> None:
+        """Save window geometry when app closes."""
+        self.master.bind("<Destroy>", lambda e: self._save_window_geometry())
+
+    def _save_window_geometry(self) -> None:
+        """Save window geometry to config file."""
+        config_path = "config.json"
+        try:
+            geometry = self.master.geometry()
+            config = {}
+            if os.path.exists(config_path):
+                with open(config_path, "r") as f:
+                    config = json.load(f)
+            config["window_geometry"] = geometry
+            with open(config_path, "w") as f:
+                json.dump(config, f, indent=2)
+        except Exception as e:
+            logger.warning(f"Failed to save window geometry: {e}")
 
     def _clear_inputs(self) -> None:
         """Clear the name and IP input fields."""
