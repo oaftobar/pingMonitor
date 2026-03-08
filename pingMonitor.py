@@ -35,7 +35,7 @@ class MonitorApp:
         self.update_queue: Queue = Queue()
         self.device_widgets: dict = {}
         self._needs_persist = False
-        self.version = "0.3.3"
+        self.version = "0.3.4"
 
         self.master.title("Ping Monitor")
         self._load_window_geometry()
@@ -161,6 +161,42 @@ class MonitorApp:
             ).grid(row=0, column=i, sticky="ew")
 
         self.rows_start = 1  # data rows start
+
+        # Status bar
+        self._create_status_bar()
+
+    def _create_status_bar(self) -> None:
+        """Create status bar at bottom of window."""
+        self.status_bar = tk.Frame(self.master, relief=tk.SUNKEN, bd=1)
+        self.status_bar.pack(fill=tk.X, side=tk.BOTTOM)
+
+        self.status_devices = tk.Label(self.status_bar, text="Devices: 0")
+        self.status_online = tk.Label(self.status_bar, text="Online: 0")
+        self.status_offline = tk.Label(self.status_bar, text="Offline: 0")
+        self.status_last_ping = tk.Label(self.status_bar, text="Last ping: --")
+
+        for label in [
+            self.status_devices,
+            self.status_online,
+            self.status_offline,
+            self.status_last_ping,
+        ]:
+            label.pack(side=tk.LEFT, padx=10)
+
+    def _update_status_bar(self) -> None:
+        """Update status bar with current stats."""
+        import time
+
+        total = len(self.devices)
+        online = sum(1 for d in self.devices if d.get("online") is True)
+        offline = sum(1 for d in self.devices if d.get("online") is False)
+
+        last_ping = time.strftime("%H:%M:%S")
+
+        self.status_devices.config(text=f"Devices: {total}")
+        self.status_online.config(text=f"Online: {online}")
+        self.status_offline.config(text=f"Offline: {offline}")
+        self.status_last_ping.config(text=f"Last ping: {last_ping}")
 
     def _show_about(self) -> None:
         messagebox.showinfo(
@@ -395,6 +431,7 @@ class MonitorApp:
 
         if updated:
             self._render_devices()
+            self._update_status_bar()
 
         # Adaptive polling: check more frequently when queue has items
         if not self.update_queue.empty():
