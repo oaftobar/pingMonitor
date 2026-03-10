@@ -35,7 +35,8 @@ class MonitorApp:
         self.update_queue: Queue = Queue()
         self.device_widgets: dict = {}
         self._needs_persist = False
-        self.version = "0.3.4"
+        self.search_var = tk.StringVar()
+        self.version = "0.3.5"
 
         self.master.title("Ping Monitor")
         self._load_window_geometry()
@@ -125,6 +126,15 @@ class MonitorApp:
 
         add_btn = tk.Button(input_frame, text="Add Device", command=self._add_device)
         add_btn.grid(row=0, column=4, padx=4)
+
+        # Search frame
+        search_frame = tk.Frame(self.master)
+        search_frame.pack(fill=tk.X, padx=8, pady=2)
+
+        tk.Label(search_frame, text="Search:").pack(side=tk.LEFT, padx=4)
+        self.search_entry = tk.Entry(search_frame, textvariable=self.search_var)
+        self.search_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=4)
+        self.search_var.trace("w", self._filter_devices)
 
         # Ping interval selector
         interval_frame = tk.Frame(self.master)
@@ -269,32 +279,74 @@ class MonitorApp:
         self._clear_inputs()
         self._persist_devices()
 
+    def _filter_devices(self, *args) -> None:
+        """Filter devices based on search text."""
+        self._render_devices()
+
     def _render_devices(self) -> None:
         """Update device rows in-place without destroying/recreating widgets."""
-        # First: update existing widgets
+        search_text = self.search_var.get().lower()
+
+        # Determine which devices are visible based on search
+        visible_indices = []
+        for idx, dev in enumerate(self.devices):
+            if not search_text:
+                visible_indices.append(idx)
+            else:
+                name_match = search_text in dev.get("name", "").lower()
+                ip_match = search_text in dev.get("ip", "").lower()
+                if name_match or ip_match:
+                    visible_indices.append(idx)
+
+        # Update existing widgets
         for idx, dev in enumerate(self.devices):
             if idx in self.device_widgets:
                 widgets = self.device_widgets[idx]
-                widgets["name"].config(text=dev["name"])
-                widgets["ip"].config(text=dev["ip"])
+                if idx in visible_indices:
+                    widgets["name"].config(text=dev["name"])
+                    widgets["ip"].config(text=dev["ip"])
+                    status_txt, color = self._get_status_info(dev.get("online"))
+                    widgets["status"].config(text=status_txt, bg=color)
+                    latency_text = self._format_latency(dev.get("latency"))
+                    widgets["latency"].config(text=latency_text)
 
-                status_txt, color = self._get_status_info(dev.get("online"))
-                widgets["status"].config(text=status_txt, bg=color)
+                    # Show the row
+                    for widget in widgets.values():
+                        widget.grid()
+                else:
+                    # Hide the row
+                    for widget in widgets.values():
+                        widget.grid_remove()
 
-                latency_text = self._format_latency(dev.get("latency"))
-                widgets["latency"].config(text=latency_text)
-
-        # Second: remove widgets for deleted devices
+        # Remove widgets for deleted devices
         for idx in list(self.device_widgets.keys()):
             if idx >= len(self.devices):
                 for widget in self.device_widgets[idx].values():
                     widget.destroy()
                 del self.device_widgets[idx]
 
-        # Third: create new widgets for new devices
+        # Create new widgets for new devices
         for idx, dev in enumerate(self.devices):
             if idx not in self.device_widgets:
                 self.device_widgets[idx] = self._create_device_row(idx, dev)
+
+        # Update status bar if no matches
+        if visible_indices:
+            self._status_bar_label.grid_remove() if hasattr(
+                self, "_status_bar_label"
+            ) else None
+        else:
+            if not hasattr(self, "_status_bar_label"):
+                self._status_bar_label = tk.Label(
+                    self.status_frame, text="No matching devices", fg="gray"
+                )
+                self._status_bar_label.grid(
+                    row=len(visible_indices) + 1, column=0, columnspan=5, pady=20
+                )
+            else:
+                self._status_bar_label.grid(
+                    row=len(visible_indices) + 1, column=0, columnspan=5, pady=20
+                )
 
     @staticmethod
     def _get_status_info(online: bool | None) -> tuple[str, str]:
