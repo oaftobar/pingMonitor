@@ -134,7 +134,7 @@ class MonitorApp:
         tk.Label(search_frame, text="Search:").pack(side=tk.LEFT, padx=4)
         self.search_entry = tk.Entry(search_frame, textvariable=self.search_var)
         self.search_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=4)
-        self.search_var.trace("w", self._filter_devices)
+        self.search_var.trace_add("write", self._filter_devices)
 
         # Ping interval selector
         interval_frame = tk.Frame(self.master)
