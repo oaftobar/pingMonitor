@@ -21,6 +21,7 @@ class MonitorApp:
 
     MAX_PING_WORKERS = 10
     MAX_PING_HISTORY = 100
+    MAX_DEVICES = 100
     PING_INTERVALS = [
         ("10 seconds", 10),
         ("60 seconds", 60),
@@ -36,7 +37,7 @@ class MonitorApp:
         self.device_widgets: dict = {}
         self._needs_persist = False
         self.search_var = tk.StringVar()
-        self.version = "0.3.5"
+        self.version = "0.3.6"
 
         self.master.title("Ping Monitor")
         self._load_window_geometry()
@@ -643,6 +644,13 @@ Last 10 pings:
 
             if not isinstance(data, list):
                 messagebox.showerror("Error", "Invalid file format - expected a list")
+                return
+
+            # Limit import size
+            if len(data) > self.MAX_DEVICES:
+                messagebox.showerror(
+                    "Error", f"Import too large. Maximum {self.MAX_DEVICES} devices."
+                )
                 return
 
             existing_ips = {d.get("ip") for d in self.devices}

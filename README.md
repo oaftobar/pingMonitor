@@ -32,7 +32,7 @@ Download the latest release from [GitHub Releases](https://github.com/oaftobar/p
 ### Run from Source
 
 Requirements:
-- Python 3.8+
+- Python 3.9+
 - Tkinter (included with most Python installations)
 
 ```bash
