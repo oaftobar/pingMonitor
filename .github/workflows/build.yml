@@ -18,6 +18,7 @@ jobs:
     
     - name: Get version
       id: version
+      shell: bash
       run: |
         VERSION=$(cat VERSION)
         echo "version=$VERSION" >> $GITHUB_OUTPUT
