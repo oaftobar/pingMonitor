@@ -38,9 +38,18 @@ def ping_once(ip: str) -> Dict[str, Any]:
         cmd = ["ping", "-c", "1", "-W", "1", ip]
 
     try:
-        result = subprocess.run(
-            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
-        )
+        if system == "windows":
+            result = subprocess.run(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                creationflags=0x08000000,  # CREATE_NO_WINDOW
+            )
+        else:
+            result = subprocess.run(
+                cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+            )
     except Exception as e:
         return {"online": False, "latency_ms": None, "error": str(e)}
 
