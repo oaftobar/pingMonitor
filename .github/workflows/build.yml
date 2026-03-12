@@ -16,13 +16,6 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Get version
-      id: version
-      run: |
-        VERSION=$(grep 'self.version = ' pingMonitor.py | sed 's/.*= *"\([^"]*\)".*/\1/')
-        echo "version=$VERSION" >> $GITHUB_OUTPUT
-        echo "Version: $VERSION"
-    
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
@@ -36,11 +29,10 @@ jobs:
     - name: Build executable
       shell: bash
       run: |
-        VERSION="${{ steps.version.outputs.version }}"
         if [ "${{ runner.os }}" = "Windows" ]; then
-          pyinstaller --onefile --windowed --name PingMonitor-v$VERSION --icon=pingMonitorICON.png --add-data "devices.example.json;." pingMonitor.py
+          pyinstaller --onefile --windowed --name PingMonitor --icon=pingMonitorICON.png --add-data "devices.example.json;." pingMonitor.py
         else
-          pyinstaller --onefile --windowed --name PingMonitor-v$VERSION --icon=pingMonitorICON.png --add-data "devices.example.json:." pingMonitor.py
+          pyinstaller --onefile --windowed --name PingMonitor --icon=pingMonitorICON.png --add-data "devices.example.json:." pingMonitor.py
         fi
     
     - name: Upload artifacts
