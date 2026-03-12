@@ -37,7 +37,7 @@ class MonitorApp:
         self.device_widgets: dict = {}
         self._needs_persist = False
         self.search_var = tk.StringVar()
-        self.version = "0.3.6"
+        self.version = "0.3.7"
 
         self.master.title("Ping Monitor")
         self._load_window_geometry()
@@ -88,6 +88,7 @@ class MonitorApp:
         """Clear the name and IP input fields."""
         self.name_entry.delete(0, tk.END)
         self.ip_entry.delete(0, tk.END)
+        self.name_entry.focus_set()
 
     def _build_ui(self) -> None:
         # Menu bar
@@ -299,17 +300,27 @@ class MonitorApp:
                 if name_match or ip_match:
                     visible_indices.append(idx)
 
-        # Update existing widgets
+        # Update existing widgets (only if values changed)
         for idx, dev in enumerate(self.devices):
             if idx in self.device_widgets:
                 widgets = self.device_widgets[idx]
                 if idx in visible_indices:
-                    widgets["name"].config(text=dev["name"])
-                    widgets["ip"].config(text=dev["ip"])
+                    # Only update if values changed
+                    if widgets["name"].cget("text") != dev["name"]:
+                        widgets["name"].config(text=dev["name"])
+                    if widgets["ip"].cget("text") != dev["ip"]:
+                        widgets["ip"].config(text=dev["ip"])
+
                     status_txt, color = self._get_status_info(dev.get("online"))
-                    widgets["status"].config(text=status_txt, bg=color)
+                    if (
+                        widgets["status"].cget("text") != status_txt
+                        or widgets["status"].cget("bg") != color
+                    ):
+                        widgets["status"].config(text=status_txt, bg=color)
+
                     latency_text = self._format_latency(dev.get("latency"))
-                    widgets["latency"].config(text=latency_text)
+                    if widgets["latency"].cget("text") != latency_text:
+                        widgets["latency"].config(text=latency_text)
 
                     # Show the row
                     for widget in widgets.values():
@@ -420,6 +431,7 @@ class MonitorApp:
             "status": status_lbl,
             "latency": latency_lbl,
             "remove": remove_btn,
+            "history": history_btn,
         }
 
     def _start_ping_loop(self) -> None:
