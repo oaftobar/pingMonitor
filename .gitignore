@@ -22,3 +22,4 @@ Thumbs.db
 # App runtime data (ignore persisted device files in repo)
 devices.json
 config.json
+VERSION
