@@ -37,7 +37,7 @@ class MonitorApp:
         self.device_widgets: dict = {}
         self._needs_persist = False
         self.search_var = tk.StringVar()
-        self.version = "0.3.7"
+        self.version = "0.3.8"
 
         self.master.title("Ping Monitor")
         self._load_window_geometry()
@@ -557,6 +557,10 @@ class MonitorApp:
 
     def _show_history(self, index: int) -> None:
         """Show ping history for a device."""
+        # Check if popup already exists and destroy it
+        if hasattr(self, "_history_popup") and self._history_popup.winfo_exists():
+            self._history_popup.destroy()
+
         if index >= len(self.devices):
             return
 
@@ -604,7 +608,8 @@ Last 10 pings:
 {history_text}"""
 
         # Show popup
-        popup = tk.Toplevel(self.master)
+        self._history_popup = tk.Toplevel(self.master)
+        popup = self._history_popup
         popup.title(f"History - {dev['name']}")
         popup.geometry("400x450")
 
