@@ -22,12 +22,13 @@ class MonitorApp:
     MAX_PING_WORKERS = 10
     MAX_PING_HISTORY = 100
     MAX_DEVICES = 100
+    DEVICE_TYPES = ["Computer", "Printer", "Server", "AP", "Router", "Other"]
     PING_INTERVALS = [
         ("10 seconds", 10),
         ("60 seconds", 60),
         ("5 minutes", 300),
     ]
-    TABLE_HEADERS = ["Name", "IP", "Status", "Latency", "Actions", "History"]
+    TABLE_HEADERS = ["Name", "IP", "Type", "Status", "Latency", "Actions", "History"]
 
     def __init__(self, master: tk.Tk, ping_interval: int = 10) -> None:
         self.master = master
@@ -126,8 +127,16 @@ class MonitorApp:
         self.ip_entry.bind("<Return>", lambda e: self._add_device())
         self.ip_entry.bind("<Escape>", lambda e: self._clear_inputs())
 
+        tk.Label(input_frame, text="Type").grid(row=0, column=4, padx=4)
+        self.type_var = tk.StringVar()
+        self.type_var.set(self.DEVICE_TYPES[0])
+        self.type_dropdown = tk.OptionMenu(
+            input_frame, self.type_var, *self.DEVICE_TYPES
+        )
+        self.type_dropdown.grid(row=0, column=5, padx=4)
+
         add_btn = tk.Button(input_frame, text="Add Device", command=self._add_device)
-        add_btn.grid(row=0, column=4, padx=4)
+        add_btn.grid(row=0, column=6, padx=4)
 
         # Search frame
         search_frame = tk.Frame(self.master)
@@ -255,6 +264,7 @@ class MonitorApp:
     def _add_device(self) -> None:
         name = self.name_entry.get().strip()
         ip = self.ip_entry.get().strip()
+        device_type = self.type_var.get()
         if not name:
             messagebox.showerror("Invalid Name", "Please enter a device name")
             return
@@ -272,6 +282,7 @@ class MonitorApp:
         device = {
             "name": name,
             "ip": ip,
+            "type": device_type,
             "online": None,
             "latency": None,
             "history": [],
@@ -310,6 +321,10 @@ class MonitorApp:
                         widgets["name"].config(text=dev["name"])
                     if widgets["ip"].cget("text") != dev["ip"]:
                         widgets["ip"].config(text=dev["ip"])
+
+                    device_type = dev.get("type", "Other")
+                    if widgets["type"].cget("text") != device_type:
+                        widgets["type"].config(text=device_type)
 
                     status_txt, color = self._get_status_info(dev.get("online"))
                     if (
@@ -387,6 +402,11 @@ class MonitorApp:
             self.status_frame, text=dev["ip"], borderwidth=1, relief="solid", width=20
         )
 
+        device_type = dev.get("type", "Other")
+        type_lbl = tk.Label(
+            self.status_frame, text=device_type, borderwidth=1, relief="solid", width=12
+        )
+
         status_txt, color = self._get_status_info(dev.get("online"))
         status_lbl = tk.Label(
             self.status_frame,
@@ -420,14 +440,16 @@ class MonitorApp:
 
         name_lbl.grid(row=row, column=0, sticky="ew")
         ip_lbl.grid(row=row, column=1, sticky="ew")
-        status_lbl.grid(row=row, column=2, sticky="ew")
-        latency_lbl.grid(row=row, column=3, sticky="ew")
-        remove_btn.grid(row=row, column=4, sticky="ew")
-        history_btn.grid(row=row, column=5, sticky="ew")
+        type_lbl.grid(row=row, column=2, sticky="ew")
+        status_lbl.grid(row=row, column=3, sticky="ew")
+        latency_lbl.grid(row=row, column=4, sticky="ew")
+        remove_btn.grid(row=row, column=5, sticky="ew")
+        history_btn.grid(row=row, column=6, sticky="ew")
 
         return {
             "name": name_lbl,
             "ip": ip_lbl,
+            "type": type_lbl,
             "status": status_lbl,
             "latency": latency_lbl,
             "remove": remove_btn,
@@ -523,11 +545,13 @@ class MonitorApp:
                     if isinstance(item, dict):
                         ip = item.get("ip", "").strip()
                         name = item.get("name", "").strip()
+                        device_type = item.get("type", "Other")
                         if ip and is_valid_ip(ip) and name:
                             self.devices.append(
                                 {
                                     "name": name,
                                     "ip": ip,
+                                    "type": device_type,
                                     "online": None,
                                     "latency": None,
                                     "history": [],
@@ -539,7 +563,11 @@ class MonitorApp:
 
     def _persist_devices(self, path: str = "devices.json") -> None:
         to_save = [
-            {"name": d.get("name", ""), "ip": d.get("ip", "")}
+            {
+                "name": d.get("name", ""),
+                "ip": d.get("ip", ""),
+                "type": d.get("type", "Other"),
+            }
             for d in self.devices
             if d.get("ip")
         ]
@@ -635,7 +663,12 @@ Last 10 pings:
             return
 
         devices_to_export = [
-            {"name": d.get("name", ""), "ip": d.get("ip", "")} for d in self.devices
+            {
+                "name": d.get("name", ""),
+                "ip": d.get("ip", ""),
+                "type": d.get("type", "Other"),
+            }
+            for d in self.devices
         ]
 
         try:
