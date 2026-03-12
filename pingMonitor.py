@@ -39,7 +39,16 @@ class MonitorApp:
         ("60 seconds", 60),
         ("5 minutes", 300),
     ]
-    TABLE_HEADERS = ["Name", "IP", "Type", "Status", "Latency", "Actions", "History"]
+    TABLE_HEADERS = [
+        "Name",
+        "IP",
+        "Type",
+        "Status",
+        "Latency",
+        "Edit",
+        "Remove",
+        "History",
+    ]
 
     def __init__(self, master: tk.Tk, ping_interval: int = 10) -> None:
         self.master = master
@@ -313,6 +322,68 @@ class MonitorApp:
         """Filter devices based on search text."""
         self._render_devices()
 
+    def _open_edit_dialog(self, device_index: int) -> None:
+        """Open a dialog to edit a device's name and type."""
+        if device_index >= len(self.devices):
+            return
+
+        dev = self.devices[device_index]
+
+        dialog = tk.Toplevel(self.master)
+        dialog.title("Edit Device")
+        dialog.transient(self.master)
+        dialog.grab_set()
+
+        tk.Label(dialog, text="Name:").grid(
+            row=0, column=0, padx=10, pady=5, sticky="e"
+        )
+        name_entry = tk.Entry(dialog, width=30)
+        name_entry.grid(row=0, column=1, padx=10, pady=5)
+        name_entry.insert(0, dev["name"])
+
+        tk.Label(dialog, text="IP:").grid(row=1, column=0, padx=10, pady=5, sticky="e")
+        ip_label = tk.Label(
+            dialog, text=dev["ip"], relief="sunken", width=28, anchor="w"
+        )
+        ip_label.grid(row=1, column=1, padx=10, pady=5)
+
+        tk.Label(dialog, text="Type:").grid(
+            row=2, column=0, padx=10, pady=5, sticky="e"
+        )
+        type_var = tk.StringVar()
+        type_var.set(dev.get("type", "Other"))
+        type_dropdown = tk.OptionMenu(dialog, type_var, *self.DEVICE_TYPES)
+        type_dropdown.grid(row=2, column=1, padx=10, pady=5, sticky="w")
+
+        def save_changes() -> None:
+            new_name = name_entry.get().strip()
+            new_type = type_var.get()
+
+            if not new_name:
+                messagebox.showerror(
+                    "Invalid Name", "Please enter a device name", parent=dialog
+                )
+                return
+
+            dev["name"] = new_name
+            dev["type"] = new_type
+            self._render_devices()
+            self._persist_devices()
+            dialog.destroy()
+
+        btn_frame = tk.Frame(dialog)
+        btn_frame.grid(row=3, column=0, columnspan=2, pady=15)
+
+        tk.Button(btn_frame, text="Update", command=save_changes, width=12).pack(
+            side=tk.LEFT, padx=5
+        )
+        tk.Button(btn_frame, text="Cancel", command=dialog.destroy, width=12).pack(
+            side=tk.LEFT, padx=5
+        )
+
+        dialog.geometry("400x180")
+        dialog.resizable(False, False)
+
     def _render_devices(self) -> None:
         """Update device rows in-place without destroying/recreating widgets."""
         search_text = self.search_var.get().lower()
@@ -449,6 +520,12 @@ class MonitorApp:
             command=lambda i=idx: self._remove_device(i),
         )
 
+        edit_btn = tk.Button(
+            self.status_frame,
+            text="Edit",
+            command=lambda i=idx: self._open_edit_dialog(i),
+        )
+
         history_btn = tk.Button(
             self.status_frame,
             text="History",
@@ -460,8 +537,9 @@ class MonitorApp:
         type_lbl.grid(row=row, column=2, sticky="ew")
         status_lbl.grid(row=row, column=3, sticky="ew")
         latency_lbl.grid(row=row, column=4, sticky="ew")
-        remove_btn.grid(row=row, column=5, sticky="ew")
-        history_btn.grid(row=row, column=6, sticky="ew")
+        edit_btn.grid(row=row, column=5, sticky="ew")
+        remove_btn.grid(row=row, column=6, sticky="ew")
+        history_btn.grid(row=row, column=7, sticky="ew")
 
         return {
             "name": name_lbl,
@@ -469,6 +547,7 @@ class MonitorApp:
             "type": type_lbl,
             "status": status_lbl,
             "latency": latency_lbl,
+            "edit": edit_btn,
             "remove": remove_btn,
             "history": history_btn,
         }
