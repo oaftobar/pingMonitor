@@ -19,7 +19,7 @@ jobs:
     - name: Get version
       id: version
       run: |
-        VERSION=$(grep -oP 'self\.version\s*=\s*"\K[^"]+' pingMonitor.py)
+        VERSION=$(grep 'self.version = ' pingMonitor.py | sed 's/.*= *"\([^"]*\)".*/\1/')
         echo "version=$VERSION" >> $GITHUB_OUTPUT
         echo "Version: $VERSION"
     
