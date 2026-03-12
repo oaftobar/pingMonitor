@@ -9,11 +9,22 @@ import sys
 import logging
 import tkinter.messagebox as messagebox
 from concurrent.futures import ThreadPoolExecutor
+import urllib.request
+import webbrowser
 
 from ping_service import ping_once, is_valid_ip
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def _get_version() -> str:
+    """Load version from VERSION file, fallback to '0.0.0' if not found."""
+    try:
+        with open("VERSION", "r") as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        return "0.0.0"
 
 
 class MonitorApp:
@@ -38,7 +49,7 @@ class MonitorApp:
         self.device_widgets: dict = {}
         self._needs_persist = False
         self.search_var = tk.StringVar()
-        self.version = "0.3.8"
+        self.version = _get_version()
 
         self.master.title("Ping Monitor")
         self._load_window_geometry()
@@ -195,6 +206,7 @@ class MonitorApp:
         self.status_online = tk.Label(self.status_bar, text="Online: 0")
         self.status_offline = tk.Label(self.status_bar, text="Offline: 0")
         self.status_last_ping = tk.Label(self.status_bar, text="Last ping: --")
+        self.status_version = tk.Label(self.status_bar, text=f"v{self.version}")
 
         for label in [
             self.status_devices,
@@ -204,10 +216,10 @@ class MonitorApp:
         ]:
             label.pack(side=tk.LEFT, padx=10)
 
+        self.status_version.pack(side=tk.RIGHT, padx=10)
+
     def _update_status_bar(self) -> None:
         """Update status bar with current stats."""
-        import time
-
         total = len(self.devices)
         online = sum(1 for d in self.devices if d.get("online") is True)
         offline = sum(1 for d in self.devices if d.get("online") is False)
@@ -227,10 +239,6 @@ class MonitorApp:
 
     def _check_for_updates(self) -> None:
         """Check GitHub for latest version and show update dialog."""
-        import urllib.request
-        import json
-        import webbrowser
-
         url = "https://api.github.com/repos/oaftobar/pingMonitor/releases/latest"
 
         try:
@@ -242,7 +250,10 @@ class MonitorApp:
                 "html_url", "https://github.com/oaftobar/pingMonitor/releases"
             )
 
-            if latest > self.version:
+            latest_tuple = tuple(int(x) for x in latest.split("."))
+            current_tuple = tuple(int(x) for x in self.version.split("."))
+
+            if latest_tuple > current_tuple:
                 response = messagebox.askyesno(
                     "Update Available",
                     f"You're on v{self.version}.\n"
@@ -278,6 +289,12 @@ class MonitorApp:
             return
         if any(d.get("ip") == ip for d in self.devices):
             messagebox.showerror("Duplicate IP", "A device with this IP already exists")
+            return
+        if len(self.devices) >= self.MAX_DEVICES:
+            messagebox.showerror(
+                "Max Devices Reached",
+                f"Maximum of {self.MAX_DEVICES} devices allowed. Remove a device to add more.",
+            )
             return
         device = {
             "name": name,
@@ -489,8 +506,6 @@ class MonitorApp:
 
     def _process_queue(self) -> None:
         """Process ping results from queue with adaptive polling."""
-        import time as time_module
-
         updated = False
         while not self.update_queue.empty():
             dev, online, latency = self.update_queue.get()
@@ -500,7 +515,7 @@ class MonitorApp:
             # Add to history
             history = dev.get("history", [])
             history.append(
-                {"timestamp": time_module.time(), "online": online, "latency": latency}
+                {"timestamp": time.time(), "online": online, "latency": latency}
             )
             # Cap history at MAX_PING_HISTORY
             if len(history) > self.MAX_PING_HISTORY:
@@ -611,12 +626,9 @@ class MonitorApp:
 
         # Build history text
         history_lines = []
-        import time as time_module
 
         for h in reversed(history[-10:]):  # Last 10 pings
-            timestamp = time_module.strftime(
-                "%H:%M:%S", time_module.localtime(h["timestamp"])
-            )
+            timestamp = time.strftime("%H:%M:%S", time.localtime(h["timestamp"]))
             status = "Online" if h.get("online") else "Offline"
             latency_str = f"{h['latency']:.0f}ms" if h.get("latency") else "N/A"
             history_lines.append(f"{timestamp}: {status} ({latency_str})")
@@ -727,10 +739,12 @@ Last 10 pings:
 
                 # Check for duplicates
                 if ip not in existing_ips:
+                    device_type = item.get("type", "Other")
                     self.devices.append(
                         {
                             "name": name,
                             "ip": ip,
+                            "type": device_type,
                             "online": None,
                             "latency": None,
                             "history": [],
