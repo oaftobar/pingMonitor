@@ -45,6 +45,7 @@ jobs:
         fi
     
     - name: Upload artifacts
+      if: startsWith(github.ref, 'refs/tags/v')
       uses: actions/upload-artifact@v4
       with:
         name: PingMonitor-${{ runner.os }}
