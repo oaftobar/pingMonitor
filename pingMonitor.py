@@ -167,6 +167,14 @@ class MonitorApp:
         self.search_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=4)
         self.search_var.trace_add("write", self._filter_devices)
 
+        tk.Label(search_frame, text="Type:").pack(side=tk.LEFT, padx=4)
+        self.type_filter_var = tk.StringVar(value="All")
+        type_filter = tk.OptionMenu(
+            search_frame, self.type_filter_var, "All", *self.DEVICE_TYPES
+        )
+        type_filter.pack(side=tk.LEFT, padx=4)
+        self.type_filter_var.trace_add("write", self._filter_devices)
+
         # Ping interval selector
         interval_frame = tk.Frame(self.master)
         interval_frame.pack(fill=tk.X, padx=8, pady=2)
@@ -387,17 +395,17 @@ class MonitorApp:
     def _render_devices(self) -> None:
         """Update device rows in-place without destroying/recreating widgets."""
         search_text = self.search_var.get().lower()
+        type_filter = self.type_filter_var.get()
 
-        # Determine which devices are visible based on search
+        # Determine which devices are visible based on search and type filter
         visible_indices = []
         for idx, dev in enumerate(self.devices):
-            if not search_text:
+            name_match = search_text in dev.get("name", "").lower()
+            ip_match = search_text in dev.get("ip", "").lower()
+            type_match = (type_filter == "All") or (dev.get("type") == type_filter)
+
+            if (name_match or ip_match) and type_match:
                 visible_indices.append(idx)
-            else:
-                name_match = search_text in dev.get("name", "").lower()
-                ip_match = search_text in dev.get("ip", "").lower()
-                if name_match or ip_match:
-                    visible_indices.append(idx)
 
         # Update existing widgets (only if values changed)
         for idx, dev in enumerate(self.devices):
