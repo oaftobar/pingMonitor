@@ -58,6 +58,9 @@ class MonitorApp:
         self.device_widgets: dict = {}
         self._needs_persist = False
         self.search_var = tk.StringVar()
+        self.type_filter_var = tk.StringVar(value="All")
+        self.sort_column = 0
+        self.sort_reverse = False
         self.version = _get_version()
 
         self.master.title("Ping Monitor")
@@ -199,20 +202,35 @@ class MonitorApp:
         self.status_frame.pack(fill=tk.BOTH, expand=True, padx=8, pady=6)
 
         # Header
-        for i, h in enumerate(self.TABLE_HEADERS):
-            tk.Label(
+        self.header_widgets = []
+        sortable_columns = [
+            "Name",
+            "IP",
+            "Type",
+            "Status",
+            "Latency",
+            "Edit",
+            "Remove",
+            "History",
+        ]
+        for i, h in enumerate(sortable_columns):
+            btn = tk.Button(
                 self.status_frame,
                 text=h,
                 font=("Helvetica", 10, "bold"),
                 borderwidth=1,
                 relief="solid",
                 width=20,
-            ).grid(row=0, column=i, sticky="ew")
+                command=lambda col=i: self._sort_devices(col),
+            )
+            btn.grid(row=0, column=i, sticky="ew")
+            self.header_widgets.append(btn)
 
         self.rows_start = 1  # data rows start
 
         # Status bar
         self._create_status_bar()
+        self._sort_devices(0)  # Initial sort by name
 
     def _create_status_bar(self) -> None:
         """Create status bar at bottom of window."""
@@ -329,6 +347,48 @@ class MonitorApp:
     def _filter_devices(self, *args) -> None:
         """Filter devices based on search text."""
         self._render_devices()
+
+    def _sort_devices(self, column: int) -> None:
+        """Sort devices by the specified column."""
+        if self.sort_column == column:
+            self.sort_reverse = not self.sort_reverse
+        else:
+            self.sort_column = column
+            self.sort_reverse = False
+
+        sortable_columns = ["name", "ip", "type", "online", "latency"]
+        sort_key = (
+            sortable_columns[column] if column < len(sortable_columns) else "name"
+        )
+
+        self.devices.sort(
+            key=lambda d: self._get_sort_key(d, sort_key), reverse=self.sort_reverse
+        )
+        self._update_header_arrows()
+        self._render_devices()
+
+    def _get_sort_key(self, dev: dict, key: str) -> tuple:
+        """Get sort key for a device, handling None values."""
+        if key == "online":
+            val = dev.get(key)
+            return (val is None, val)
+        elif key == "latency":
+            val = dev.get(key)
+            return (val is None, val if val is not None else -1)
+        else:
+            val = dev.get(key, "")
+            return (isinstance(val, str) and val.lower(), val)
+
+    def _update_header_arrows(self) -> None:
+        """Update header buttons to show sort direction."""
+        sortable_columns = ["Name", "IP", "Type", "Status", "Latency"]
+        arrow = " ▼" if self.sort_reverse else " ▲"
+        for i, btn in enumerate(self.header_widgets[: len(sortable_columns)]):
+            text = sortable_columns[i]
+            if i == self.sort_column:
+                btn.config(text=text + arrow)
+            else:
+                btn.config(text=text)
 
     def _open_edit_dialog(self, device_index: int) -> None:
         """Open a dialog to edit a device's name and type."""
