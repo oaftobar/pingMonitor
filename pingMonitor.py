@@ -197,9 +197,27 @@ class MonitorApp:
         )
         apply_btn.grid(row=0, column=2, padx=4)
 
-        # Status frame
-        self.status_frame = tk.Frame(self.master)
-        self.status_frame.pack(fill=tk.BOTH, expand=True, padx=8, pady=6)
+        # Status frame with horizontal scrollbar
+        self.scroll_frame = tk.Frame(self.master)
+        self.scroll_frame.pack(fill=tk.BOTH, expand=True, padx=8, pady=6)
+
+        self.canvas = tk.Canvas(self.scroll_frame)
+        self.h_scrollbar = tk.Scrollbar(
+            self.scroll_frame, orient="horizontal", command=self.canvas.xview
+        )
+        self.canvas.configure(xscrollcommand=self.h_scrollbar.set)
+
+        self.canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        self.h_scrollbar.pack(side=tk.BOTTOM, fill=tk.X)
+
+        self.scroll_frame = tk.Frame(self.canvas)
+        self.canvas.create_window((0, 0), window=self.scroll_frame, anchor="nw")
+        self.scroll_frame.bind(
+            "<Configure>",
+            lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")),
+        )
+
+        self.canvas.bind("<Shift-MouseWheel>", self._on_shift_scroll)
 
         # Header
         self.header_widgets = []
@@ -215,7 +233,7 @@ class MonitorApp:
         ]
         for i, h in enumerate(sortable_columns):
             btn = tk.Button(
-                self.status_frame,
+                self.scroll_frame,
                 text=h,
                 font=("Helvetica", 10, "bold"),
                 borderwidth=1,
@@ -231,6 +249,11 @@ class MonitorApp:
         # Status bar
         self._create_status_bar()
         self._sort_devices(0)  # Initial sort by name
+
+    def _on_shift_scroll(self, event):
+        """Handle Shift+MouseWheel for horizontal scrolling."""
+        self.canvas.xview_scroll(int(-1 * (event.delta / 120)), "units")
+        return "break"
 
     def _create_status_bar(self) -> None:
         """Create status bar at bottom of window."""
@@ -521,7 +544,7 @@ class MonitorApp:
         else:
             if not hasattr(self, "_status_bar_label"):
                 self._status_bar_label = tk.Label(
-                    self.status_frame, text="No matching devices", fg="gray"
+                    self.scroll_frame, text="No matching devices", fg="gray"
                 )
                 self._status_bar_label.grid(
                     row=len(visible_indices) + 1, column=0, columnspan=5, pady=20
@@ -552,20 +575,20 @@ class MonitorApp:
         row = self.rows_start + idx
 
         name_lbl = tk.Label(
-            self.status_frame, text=dev["name"], borderwidth=1, relief="solid", width=20
+            self.scroll_frame, text=dev["name"], borderwidth=1, relief="solid", width=20
         )
         ip_lbl = tk.Label(
-            self.status_frame, text=dev["ip"], borderwidth=1, relief="solid", width=20
+            self.scroll_frame, text=dev["ip"], borderwidth=1, relief="solid", width=20
         )
 
         device_type = dev.get("type", "Other")
         type_lbl = tk.Label(
-            self.status_frame, text=device_type, borderwidth=1, relief="solid", width=12
+            self.scroll_frame, text=device_type, borderwidth=1, relief="solid", width=12
         )
 
         status_txt, color = self._get_status_info(dev.get("online"))
         status_lbl = tk.Label(
-            self.status_frame,
+            self.scroll_frame,
             text=status_txt,
             borderwidth=1,
             relief="solid",
@@ -575,7 +598,7 @@ class MonitorApp:
 
         latency_text = self._format_latency(dev.get("latency"))
         latency_lbl = tk.Label(
-            self.status_frame,
+            self.scroll_frame,
             text=latency_text,
             borderwidth=1,
             relief="solid",
@@ -583,19 +606,19 @@ class MonitorApp:
         )
 
         remove_btn = tk.Button(
-            self.status_frame,
+            self.scroll_frame,
             text="Remove",
             command=lambda i=idx: self._remove_device(i),
         )
 
         edit_btn = tk.Button(
-            self.status_frame,
+            self.scroll_frame,
             text="Edit",
             command=lambda i=idx: self._open_edit_dialog(i),
         )
 
         history_btn = tk.Button(
-            self.status_frame,
+            self.scroll_frame,
             text="History",
             command=lambda i=idx: self._show_history(i),
         )
