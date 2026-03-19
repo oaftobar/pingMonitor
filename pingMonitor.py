@@ -477,15 +477,30 @@ class MonitorApp:
 
     def _render_devices(self) -> None:
         """Update device rows in-place without destroying/recreating widgets."""
-        search_text = self.search_var.get().lower()
+        raw_search = self.search_var.get()
         type_filter = self.type_filter_var.get()
 
-        # Determine which devices are visible based on search and type filter
+        text_only = raw_search.lower().strip()
+        modifier_type = None
+
+        if "type:" in raw_search.lower():
+            idx = raw_search.lower().find("type:")
+            before = raw_search[:idx].lower().strip()
+            after = raw_search[idx + 5 :].lower().strip()
+            text_only = before
+            if after:
+                modifier_type = after
+
         visible_indices = []
         for idx, dev in enumerate(self.devices):
-            name_match = search_text in dev.get("name", "").lower()
-            ip_match = search_text in dev.get("ip", "").lower()
-            type_match = (type_filter == "All") or (dev.get("type") == type_filter)
+            name_match = text_only in dev.get("name", "").lower()
+            ip_match = text_only in dev.get("ip", "").lower()
+
+            effective_type = type_filter if type_filter != "All" else modifier_type
+            device_type = dev.get("type", "Other").lower()
+            type_match = (effective_type is None) or (
+                device_type == effective_type.lower()
+            )
 
             if (name_match or ip_match) and type_match:
                 visible_indices.append(idx)
