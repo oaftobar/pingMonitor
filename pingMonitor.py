@@ -61,6 +61,7 @@ class MonitorApp:
         self.type_filter_var = tk.StringVar(value="All")
         self.sort_column = 0
         self.sort_reverse = False
+        self.selected_indices: set[int] = set()
         self.version = _get_version()
 
         self.master.title("Ping Monitor")
@@ -221,6 +222,14 @@ class MonitorApp:
 
         # Header
         self.header_widgets = []
+        self.select_all_var = tk.BooleanVar(value=False)
+        select_all_cb = tk.Checkbutton(
+            self.scroll_frame,
+            variable=self.select_all_var,
+            command=self._toggle_select_all,
+        )
+        select_all_cb.grid(row=0, column=0, sticky="ew")
+
         sortable_columns = [
             "Name",
             "IP",
@@ -241,10 +250,35 @@ class MonitorApp:
                 width=20,
                 command=lambda col=i: self._sort_devices(col),
             )
-            btn.grid(row=0, column=i, sticky="ew")
+            btn.grid(row=0, column=i + 1, sticky="ew")
             self.header_widgets.append(btn)
 
         self.rows_start = 1  # data rows start
+
+        # Bulk actions frame (initially hidden)
+        self.bulk_actions_frame = tk.Frame(self.master, bg="#f0f0f0")
+        self.bulk_type_var = tk.StringVar()
+        tk.Label(self.bulk_actions_frame, text="Selected: 0", bg="#f0f0f0").pack(
+            side=tk.LEFT, padx=5
+        )
+        tk.Label(self.bulk_actions_frame, text="Change type:", bg="#f0f0f0").pack(
+            side=tk.LEFT, padx=5
+        )
+        tk.OptionMenu(
+            self.bulk_actions_frame, self.bulk_type_var, *self.DEVICE_TYPES
+        ).pack(side=tk.LEFT, padx=2)
+        tk.Button(
+            self.bulk_actions_frame, text="Apply", command=self._bulk_change_type
+        ).pack(side=tk.LEFT, padx=2)
+        tk.Button(
+            self.bulk_actions_frame,
+            text="Delete",
+            fg="red",
+            command=self._bulk_delete_selected,
+        ).pack(side=tk.LEFT, padx=5)
+        tk.Button(
+            self.bulk_actions_frame, text="Clear", command=self._clear_selection
+        ).pack(side=tk.LEFT, padx=2)
 
         # Status bar
         self._create_status_bar()
@@ -589,6 +623,11 @@ class MonitorApp:
         """Create a new device row and return widget references."""
         row = self.rows_start + idx
 
+        cb_var = tk.BooleanVar(value=False)
+        cb = tk.Checkbutton(
+            self.scroll_frame, variable=cb_var, command=lambda: self._toggle_select(idx)
+        )
+
         name_lbl = tk.Label(
             self.scroll_frame, text=dev["name"], borderwidth=1, relief="solid", width=20
         )
@@ -638,16 +677,19 @@ class MonitorApp:
             command=lambda i=idx: self._show_history(i),
         )
 
-        name_lbl.grid(row=row, column=0, sticky="ew")
-        ip_lbl.grid(row=row, column=1, sticky="ew")
-        type_lbl.grid(row=row, column=2, sticky="ew")
-        status_lbl.grid(row=row, column=3, sticky="ew")
-        latency_lbl.grid(row=row, column=4, sticky="ew")
-        edit_btn.grid(row=row, column=5, sticky="ew")
-        remove_btn.grid(row=row, column=6, sticky="ew")
-        history_btn.grid(row=row, column=7, sticky="ew")
+        cb.grid(row=row, column=0, sticky="ew")
+        name_lbl.grid(row=row, column=1, sticky="ew")
+        ip_lbl.grid(row=row, column=2, sticky="ew")
+        type_lbl.grid(row=row, column=3, sticky="ew")
+        status_lbl.grid(row=row, column=4, sticky="ew")
+        latency_lbl.grid(row=row, column=5, sticky="ew")
+        edit_btn.grid(row=row, column=6, sticky="ew")
+        remove_btn.grid(row=row, column=7, sticky="ew")
+        history_btn.grid(row=row, column=8, sticky="ew")
 
         return {
+            "checkbox": cb,
+            "checkbox_var": cb_var,
             "name": name_lbl,
             "ip": ip_lbl,
             "type": type_lbl,
@@ -657,6 +699,78 @@ class MonitorApp:
             "remove": remove_btn,
             "history": history_btn,
         }
+
+    def _toggle_select(self, idx: int) -> None:
+        """Toggle selection for a single device."""
+        if idx in self.selected_indices:
+            self.selected_indices.discard(idx)
+        else:
+            self.selected_indices.add(idx)
+        self._update_bulk_actions_visibility()
+
+    def _toggle_select_all(self) -> None:
+        """Select or deselect all visible devices."""
+        if self.select_all_var.get():
+            for idx in range(len(self.devices)):
+                self.selected_indices.add(idx)
+                if idx in self.device_widgets:
+                    self.device_widgets[idx]["checkbox_var"].set(True)
+        else:
+            self.selected_indices.clear()
+            for idx, widgets in self.device_widgets.items():
+                widgets["checkbox_var"].set(False)
+        self._update_bulk_actions_visibility()
+
+    def _update_bulk_actions_visibility(self) -> None:
+        """Show or hide bulk actions frame based on selection."""
+        count = len(self.selected_indices)
+        for widget in self.bulk_actions_frame.winfo_children():
+            if isinstance(widget, tk.Label) and "Selected:" in widget.cget("text"):
+                widget.config(text=f"Selected: {count}")
+        if count > 0:
+            self.bulk_actions_frame.pack(fill=tk.X, padx=8, pady=2)
+        else:
+            self.bulk_actions_frame.pack_forget()
+
+    def _bulk_change_type(self) -> None:
+        """Change type of all selected devices."""
+        new_type = self.bulk_type_var.get()
+        if not new_type:
+            return
+        for idx in list(self.selected_indices):
+            if idx < len(self.devices):
+                self.devices[idx]["type"] = new_type
+        self._render_devices()
+        self._persist_devices()
+        self._clear_selection()
+
+    def _bulk_delete_selected(self) -> None:
+        """Delete all selected devices."""
+        if not self.selected_indices:
+            return
+        response = messagebox.askyesno(
+            "Confirm Delete",
+            f"Delete {len(self.selected_indices)} selected device(s)?",
+        )
+        if response:
+            indices_to_remove = sorted(list(self.selected_indices), reverse=True)
+            for idx in indices_to_remove:
+                if idx < len(self.devices):
+                    del self.devices[idx]
+            self.selected_indices.clear()
+            self.device_widgets.clear()
+            self._render_devices()
+            self._persist_devices()
+            self.bulk_actions_frame.pack_forget()
+            self.select_all_var.set(False)
+
+    def _clear_selection(self) -> None:
+        """Clear all selections."""
+        self.selected_indices.clear()
+        self.select_all_var.set(False)
+        for idx, widgets in self.device_widgets.items():
+            widgets["checkbox_var"].set(False)
+        self._update_bulk_actions_visibility()
 
     def _start_ping_loop(self) -> None:
         self.ping_thread = threading.Thread(target=self._ping_loop, daemon=True)
@@ -780,6 +894,12 @@ class MonitorApp:
     def _remove_device(self, index: int) -> None:
         if 0 <= index < len(self.devices):
             self.devices.pop(index)
+            self.selected_indices.discard(index)
+            self.selected_indices = {
+                i - 1 if i > index else i for i in self.selected_indices
+            }
+            self.device_widgets.clear()
+            self.select_all_var.set(False)
             self._persist_devices()
             self._render_devices()
 
