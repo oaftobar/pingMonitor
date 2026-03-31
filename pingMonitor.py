@@ -11,6 +11,7 @@ import tkinter.messagebox as messagebox
 from concurrent.futures import ThreadPoolExecutor
 import urllib.request
 import webbrowser
+from functools import partial
 
 from ping_service import ping_once, is_valid_ip
 
@@ -48,7 +49,20 @@ class MonitorApp:
         "Edit",
         "Remove",
         "History",
+        "Notes",
     ]
+
+    SORTABLE_HEADERS = ["Name", "IP", "Type", "Status", "Latency"]
+    SORTABLE_KEYS = ["name", "ip", "type", "online", "latency"]
+
+    STATUS_ONLINE = "Online"
+    STATUS_OFFLINE = "Offline"
+    STATUS_UNKNOWN = "Unknown"
+    COLOR_ONLINE = "green"
+    COLOR_OFFLINE = "red"
+    COLOR_UNKNOWN = "gray"
+    NO_NOTES = "—"
+    TRUNCATE_SUFFIX = "..."
 
     def __init__(self, master: tk.Tk, ping_interval: int = 10) -> None:
         self.master = master
@@ -173,7 +187,6 @@ class MonitorApp:
         self.search_var.trace_add("write", self._filter_devices)
 
         tk.Label(search_frame, text="Type:").pack(side=tk.LEFT, padx=4)
-        self.type_filter_var = tk.StringVar(value="All")
         type_filter = tk.OptionMenu(
             search_frame, self.type_filter_var, "All", *self.DEVICE_TYPES
         )
@@ -231,18 +244,7 @@ class MonitorApp:
         )
         select_all_cb.grid(row=0, column=0, sticky="ew")
 
-        sortable_columns = [
-            "Name",
-            "IP",
-            "Type",
-            "Status",
-            "Latency",
-            "Edit",
-            "Remove",
-            "History",
-            "Notes",
-        ]
-        for i, h in enumerate(sortable_columns):
+        for i, h in enumerate(self.SORTABLE_HEADERS):
             btn = tk.Button(
                 self.scroll_frame,
                 text=h,
@@ -250,7 +252,7 @@ class MonitorApp:
                 borderwidth=1,
                 relief="solid",
                 width=20,
-                command=lambda col=i: self._sort_devices(col),
+                command=partial(self._sort_devices, i),
             )
             btn.grid(row=0, column=i + 1, sticky="ew")
             self.header_widgets.append(btn)
@@ -416,9 +418,8 @@ class MonitorApp:
             self.sort_column = column
             self.sort_reverse = False
 
-        sortable_columns = ["name", "ip", "type", "online", "latency"]
         sort_key = (
-            sortable_columns[column] if column < len(sortable_columns) else "name"
+            self.SORTABLE_KEYS[column - 1] if column > 0 else "name"
         )
 
         self.devices.sort(
@@ -441,10 +442,9 @@ class MonitorApp:
 
     def _update_header_arrows(self) -> None:
         """Update header buttons to show sort direction."""
-        sortable_columns = ["Name", "IP", "Type", "Status", "Latency"]
         arrow = " ▼" if self.sort_reverse else " ▲"
-        for i, btn in enumerate(self.header_widgets[: len(sortable_columns)]):
-            text = sortable_columns[i]
+        for i, btn in enumerate(self.header_widgets[: len(self.SORTABLE_HEADERS)]):
+            text = self.SORTABLE_HEADERS[i]
             if i == self.sort_column:
                 btn.config(text=text + arrow)
             else:
@@ -605,14 +605,14 @@ class MonitorApp:
         else:
             if not hasattr(self, "_status_bar_label"):
                 self._status_bar_label = tk.Label(
-                    self.scroll_frame, text="No matching devices", fg="gray"
+                    self.scroll_frame, text="No matching devices", bg=self.COLOR_UNKNOWN
                 )
                 self._status_bar_label.grid(
-                    row=len(visible_indices) + 1, column=0, columnspan=5, pady=20
+                    row=len(visible_indices) + 1, column=0, columnspan=10, pady=20
                 )
             else:
                 self._status_bar_label.grid(
-                    row=len(visible_indices) + 1, column=0, columnspan=5, pady=20
+                    row=len(visible_indices) + 1, column=0, columnspan=10, pady=20
                 )
 
     @staticmethod
@@ -622,9 +622,12 @@ class MonitorApp:
         Returns:
             Tuple of (status_text, background_color)
         """
-        if online is None:
-            return "Unknown", "gray"
-        return ("Online", "green") if online else ("Offline", "red")
+        if online is True:
+            return MonitorApp.STATUS_ONLINE, MonitorApp.COLOR_ONLINE
+        elif online is False:
+            return MonitorApp.STATUS_OFFLINE, MonitorApp.COLOR_OFFLINE
+        else:
+            return MonitorApp.STATUS_UNKNOWN, MonitorApp.COLOR_UNKNOWN
 
     @staticmethod
     def _format_latency(latency: float | None) -> str:
@@ -783,8 +786,9 @@ class MonitorApp:
             for idx in indices_to_remove:
                 if idx < len(self.devices):
                     del self.devices[idx]
+                if idx in self.device_widgets:
+                    del self.device_widgets[idx]
             self.selected_indices.clear()
-            self.device_widgets.clear()
             self._render_devices()
             self._persist_devices()
             self.bulk_actions_frame.pack_forget()
@@ -920,7 +924,7 @@ class MonitorApp:
         if new_interval != self.ping_interval:
             self.ping_interval = new_interval
 
-    def _load_persisted_devices(self, path: str = "devices.json"):
+    def _load_persisted_devices(self, path: str = "devices.json") -> None:
         if not os.path.exists(path):
             self._persist_devices()
             return
@@ -939,6 +943,7 @@ class MonitorApp:
                                     "name": name,
                                     "ip": ip,
                                     "type": device_type,
+                                    "notes": item.get("notes", ""),
                                     "online": None,
                                     "latency": None,
                                     "history": [],
@@ -954,6 +959,7 @@ class MonitorApp:
                 "name": d.get("name", ""),
                 "ip": d.get("ip", ""),
                 "type": d.get("type", "Other"),
+                "notes": d.get("notes", ""),
             }
             for d in self.devices
             if d.get("ip")
@@ -968,10 +974,15 @@ class MonitorApp:
         if 0 <= index < len(self.devices):
             self.devices.pop(index)
             self.selected_indices.discard(index)
-            self.selected_indices = {
-                i - 1 if i > index else i for i in self.selected_indices
-            }
-            self.device_widgets.clear()
+            adjusted = set()
+            for idx in self.selected_indices:
+                if idx < index:
+                    adjusted.add(idx)
+                elif idx > index:
+                    adjusted.add(idx - 1)
+            self.selected_indices = adjusted
+            if index in self.device_widgets:
+                del self.device_widgets[index]
             self.select_all_var.set(False)
             self._persist_devices()
             self._render_devices()
@@ -1007,7 +1018,7 @@ class MonitorApp:
 
         for h in reversed(history[-10:]):  # Last 10 pings
             timestamp = time.strftime("%H:%M:%S", time.localtime(h["timestamp"]))
-            status = "Online" if h.get("online") else "Offline"
+            status, _ = self._get_status_info(h.get("online"))
             latency_str = f"{h['latency']:.0f}ms" if h.get("latency") else "N/A"
             history_lines.append(f"{timestamp}: {status} ({latency_str})")
 
@@ -1057,6 +1068,7 @@ Last 10 pings:
                 "name": d.get("name", ""),
                 "ip": d.get("ip", ""),
                 "type": d.get("type", "Other"),
+                "notes": d.get("notes", ""),
             }
             for d in self.devices
         ]
