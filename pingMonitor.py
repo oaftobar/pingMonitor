@@ -62,6 +62,7 @@ class MonitorApp:
         self.sort_column = 0
         self.sort_reverse = False
         self.selected_indices: set[int] = set()
+        self._notes_entry = None
         self.version = _get_version()
 
         self.master.title("Ping Monitor")
@@ -239,6 +240,7 @@ class MonitorApp:
             "Edit",
             "Remove",
             "History",
+            "Notes",
         ]
         for i, h in enumerate(sortable_columns):
             btn = tk.Button(
@@ -392,6 +394,7 @@ class MonitorApp:
             "name": name,
             "ip": ip,
             "type": device_type,
+            "notes": "",
             "online": None,
             "latency": None,
             "history": [],
@@ -506,7 +509,7 @@ class MonitorApp:
             side=tk.LEFT, padx=5
         )
 
-        dialog.geometry("400x180")
+        dialog.geometry("400x220")
         dialog.resizable(False, False)
 
     def _render_devices(self) -> None:
@@ -565,13 +568,22 @@ class MonitorApp:
                     if widgets["latency"].cget("text") != latency_text:
                         widgets["latency"].config(text=latency_text)
 
+                    notes = dev.get("notes", "")
+                    notes_display = (
+                        notes[:20] + "..." if len(notes) > 20 else notes or "—"
+                    )
+                    if widgets["notes"].cget("text") != notes_display:
+                        widgets["notes"].config(text=notes_display)
+
                     # Show the row
-                    for widget in widgets.values():
-                        widget.grid()
+                    for key, widget in widgets.items():
+                        if key != "checkbox_var":
+                            widget.grid()
                 else:
                     # Hide the row
-                    for widget in widgets.values():
-                        widget.grid_remove()
+                    for key, widget in widgets.items():
+                        if key != "checkbox_var":
+                            widget.grid_remove()
 
         # Remove widgets for deleted devices
         for idx in list(self.device_widgets.keys()):
@@ -677,6 +689,18 @@ class MonitorApp:
             command=lambda i=idx: self._show_history(i),
         )
 
+        notes = dev.get("notes", "")
+        notes_display = notes[:20] + "..." if len(notes) > 20 else notes or "—"
+        notes_lbl = tk.Label(
+            self.scroll_frame,
+            text=notes_display,
+            borderwidth=1,
+            relief="solid",
+            width=20,
+            cursor="xterm",
+        )
+        notes_lbl.bind("<Double-Button-1>", lambda e, i=idx: self._start_notes_edit(i))
+
         cb.grid(row=row, column=0, sticky="ew")
         name_lbl.grid(row=row, column=1, sticky="ew")
         ip_lbl.grid(row=row, column=2, sticky="ew")
@@ -686,6 +710,7 @@ class MonitorApp:
         edit_btn.grid(row=row, column=6, sticky="ew")
         remove_btn.grid(row=row, column=7, sticky="ew")
         history_btn.grid(row=row, column=8, sticky="ew")
+        notes_lbl.grid(row=row, column=9, sticky="ew")
 
         return {
             "checkbox": cb,
@@ -698,6 +723,7 @@ class MonitorApp:
             "edit": edit_btn,
             "remove": remove_btn,
             "history": history_btn,
+            "notes": notes_lbl,
         }
 
     def _toggle_select(self, idx: int) -> None:
@@ -771,6 +797,53 @@ class MonitorApp:
         for idx, widgets in self.device_widgets.items():
             widgets["checkbox_var"].set(False)
         self._update_bulk_actions_visibility()
+
+    def _start_notes_edit(self, idx: int) -> None:
+        """Start inline editing of notes for a device."""
+        if idx >= len(self.devices) or idx not in self.device_widgets:
+            return
+
+        if hasattr(self, "_notes_entry") and self._notes_entry is not None:
+            self._notes_entry.destroy()
+            self._notes_entry = None
+
+        widgets = self.device_widgets[idx]
+        current_notes = self.devices[idx].get("notes", "")
+        row = widgets["notes"].grid_info()["row"]
+
+        widgets["notes"].grid_remove()
+
+        self._notes_entry = tk.Entry(
+            self.scroll_frame,
+            width=20,
+            borderwidth=1,
+            relief="solid",
+        )
+        self._notes_entry.insert(0, current_notes)
+        self._notes_entry.select_range(0, tk.END)
+        self._notes_entry.grid(row=row, column=9, sticky="ew")
+        self._notes_entry.focus_set()
+
+        def save_notes() -> None:
+            new_notes = self._notes_entry.get().strip()
+            self.devices[idx]["notes"] = new_notes
+            self._notes_entry.destroy()
+            self._notes_entry = None
+            self._persist_devices()
+            self._render_devices()
+
+        def on_enter(e: tk.Event) -> None:
+            save_notes()
+
+        def on_escape(e: tk.Event) -> None:
+            if self._notes_entry:
+                self._notes_entry.destroy()
+                self._notes_entry = None
+            self._render_devices()
+
+        self._notes_entry.bind("<Return>", on_enter)
+        self._notes_entry.bind("<Escape>", on_escape)
+        self._notes_entry.bind("<FocusOut>", lambda e: save_notes())
 
     def _start_ping_loop(self) -> None:
         self.ping_thread = threading.Thread(target=self._ping_loop, daemon=True)
@@ -1045,11 +1118,13 @@ Last 10 pings:
                 # Check for duplicates
                 if ip not in existing_ips:
                     device_type = item.get("type", "Other")
+                    device_notes = item.get("notes", "")
                     self.devices.append(
                         {
                             "name": name,
                             "ip": ip,
                             "type": device_type,
+                            "notes": device_notes,
                             "online": None,
                             "latency": None,
                             "history": [],
